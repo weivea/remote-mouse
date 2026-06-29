@@ -1,0 +1,28 @@
+name: RemoteMouse
+options:
+  bundleIdPrefix: com.weivea
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+targets:
+  RemoteMouse:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: RemoteMouse
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSLocalNetworkUsageDescription: 用于在同一 WiFi 下发现并连接你的电脑作为触控板/键盘。
+        NSBonjourServices:
+          - _remotemouse._tcp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.weivea.remotemouse
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "5.0"

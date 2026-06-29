@@ -1,0 +1,8 @@
+# Go
+/server/rmserver
+*.exe
+# iOS / Xcode
+ios/RemoteMouse.xcodeproj/
+DerivedData/
+*.xcuserstate
+.DS_Store
