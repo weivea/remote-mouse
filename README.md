@@ -42,6 +42,7 @@ xcodebuild -project ios/RemoteMouse.xcodeproj -scheme RemoteMouse \
 ```
 
 ## 快速了解
+- 当前进度：[docs/12-progress.md](docs/12-progress.md)
 - 项目概述：[docs/00-overview.md](docs/00-overview.md)
 - 协议：[proto/protocol-mvp.md](proto/protocol-mvp.md)
 - 锁屏难点（关键）：[docs/09-lock-screen.md](docs/09-lock-screen.md)

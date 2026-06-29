@@ -20,6 +20,7 @@
 | 09 | [lock-screen](09-lock-screen.md) | 锁屏控制可行性（关键难点）|
 | 10 | [roadmap](10-roadmap.md) | 里程碑与迭代计划 |
 | 11 | [glossary](11-glossary.md) | 术语表 |
+| 12 | [progress](12-progress.md) | **当前进度（先读）** |
 
 ## 一句话结论
 
