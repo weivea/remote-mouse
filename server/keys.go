@@ -30,12 +30,12 @@ const (
 
 	KeyF1 = 30 // F1..F12 = 30..41
 
-	KeyVolDown   = 50
-	KeyVolUp     = 51
-	KeyMute      = 52
-	KeyPlayPause = 53
-	KeyNext      = 54
-	KeyPrev      = 55
+	KeyVolDown   = 200
+	KeyVolUp     = 201
+	KeyMute      = 202
+	KeyPlayPause = 203
+	KeyNext      = 204
+	KeyPrev      = 205
 )
 
 // Letters use uppercase ASCII A–Z (65–90) and digits use '0'–'9' (48–57),

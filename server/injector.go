@@ -7,5 +7,6 @@ type Injector interface {
 	Button(btn string, down bool)
 	Scroll(dx, dy int)
 	Text(s string)
+	Key(code, mods int, down bool)
 	Close()
 }

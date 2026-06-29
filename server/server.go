@@ -85,6 +85,8 @@ func (s *Server) handle(c net.Conn) {
 			s.inj.Scroll(m.Dx, m.Dy)
 		case "text":
 			s.inj.Text(m.S)
+		case "key":
+			s.inj.Key(m.Code, m.Mods, m.Down != nil && *m.Down)
 		case "ping":
 			s.send(c, map[string]any{"t": "pong", "ts": m.Ts})
 		case "bye":
