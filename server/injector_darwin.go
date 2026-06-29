@@ -47,6 +47,13 @@ static void rmTypeText(unsigned short* chars, int n) {
     CGEventPost(kCGHIDEventTap, up);
     CFRelease(up);
 }
+
+static void keyEvent(int vk, unsigned long flags, int down) {
+    CGEventRef e = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)vk, down != 0);
+    CGEventSetFlags(e, (CGEventFlags)flags);
+    CGEventPost(kCGHIDEventTap, e);
+    CFRelease(e);
+}
 */
 import "C"
 
@@ -85,6 +92,83 @@ func (m *macInjector) Text(s string) {
 }
 
 func (m *macInjector) Close() {}
+
+// macKey maps neutral codes to macOS CGKeyCodes (-1 = unmapped). Letters cover
+// common shortcut keys; arrows/edit/nav/F-keys are full. Media handled separately.
+func macKey(code int) int {
+	switch code {
+	case KeyEnter:
+		return 36
+	case KeyBack:
+		return 51
+	case KeyTab:
+		return 48
+	case KeyEsc:
+		return 53
+	case KeyDel:
+		return 117
+	case KeyArrowLeft:
+		return 123
+	case KeyArrowRight:
+		return 124
+	case KeyArrowDown:
+		return 125
+	case KeyArrowUp:
+		return 126
+	case KeyHome:
+		return 115
+	case KeyEnd:
+		return 119
+	case KeyPgUp:
+		return 116
+	case KeyPgDn:
+		return 121
+	case 'A':
+		return 0
+	case 'C':
+		return 8
+	case 'V':
+		return 9
+	case 'X':
+		return 7
+	case 'Z':
+		return 6
+	}
+	if code >= KeyF1 && code <= KeyF1+11 {
+		fk := []int{122, 120, 99, 118, 96, 97, 98, 100, 101, 109, 103, 111}
+		return fk[code-KeyF1]
+	}
+	return -1
+}
+
+func macFlags(mods int) uint64 {
+	var f uint64
+	if mods&ModMeta != 0 {
+		f |= 0x100000
+	}
+	if mods&ModShift != 0 {
+		f |= 0x20000
+	}
+	if mods&ModCtrl != 0 {
+		f |= 0x40000
+	}
+	if mods&ModAlt != 0 {
+		f |= 0x80000
+	}
+	return f
+}
+
+func (m *macInjector) Key(code, mods int, down bool) {
+	vk := macKey(code)
+	if vk < 0 {
+		return // media/unmapped: stubbed until later milestone
+	}
+	d := C.int(0)
+	if down {
+		d = 1
+	}
+	C.keyEvent(C.int(vk), C.ulong(macFlags(mods)), d)
+}
 
 func btnCode(b string) int {
 	switch b {
