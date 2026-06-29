@@ -1,0 +1,23 @@
+# 11 — 术语表
+
+- **Server**：装在 PC 上接收信号并注入输入的端。
+- **Client**：手机端，采集触控/键盘发信号。
+- **控制面/数据面**：可靠 TCP 通道 / 低延迟 UDP 通道。
+- **mDNS / Bonjour / DNS-SD**：局域网零配置服务发现（5353/UDP）。
+- **TXT 记录**：mDNS 服务附带的键值（name/port/devid 等）。
+- **PAKE / SPAKE2 / SRP**：密码不上线的认证密钥交换。
+- **HMAC 挑战-响应**：nonce+HMAC(密码派生) 简版认证。
+- **AEAD**：带认证的加密（AES-GCM/ChaCha20-Poly1305）。
+- **TOFU**：首次信任并锁定证书指纹。
+- **注入/Inject**：模拟系统鼠标键盘事件。
+- **robotgo / enigo**：Go / Rust 跨平台输入模拟库。
+- **Secure Desktop / Winlogon**：Win 安全桌面（锁屏/UAC/登录）。
+- **Session 0**：Win 服务所在隔离会话。
+- **Credential Provider**：Win 登录认证插件接口。
+- **loginwindow / WindowServer**：macOS 登录窗/图形服务进程。
+- **CGEvent**：macOS 合成输入 API。
+- **LaunchDaemon/Agent**：macOS 后台服务（root / 用户）。
+- **TCC/SIP**：macOS 隐私授权 / 系统完整性保护。
+- **HID**：人机接口设备（键鼠标准）。
+- **HID 桥**：手机→微控制器→USB 假键鼠，绕 OS 锁屏限制。
+- **devid**：客户端唯一标识，用于受信免密。
