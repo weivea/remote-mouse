@@ -27,6 +27,7 @@ func main() {
 	name := flag.String("name", sanitizeName(host), "device display name")
 	pass := flag.String("pass", "1234", "connection password")
 	port := flag.Int("port", 27500, "TCP control port")
+	notray := flag.Bool("notray", false, "console mode, no tray icon")
 	flag.Parse()
 
 	devid := make([]byte, 8)
@@ -47,7 +48,10 @@ func main() {
 	}
 
 	log.Printf("password=%q  platform=%s  devid=%s", *pass, platform(), id)
-	if err := srv.Listen(*port); err != nil {
-		log.Fatal(err)
-	}
+	go func() {
+		if err := srv.Listen(*port); err != nil {
+			log.Fatal(err)
+		}
+	}()
+	runUI(*notray, *pass, *port)
 }

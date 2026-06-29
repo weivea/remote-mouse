@@ -21,7 +21,7 @@ go run . -pass 1234            # 默认 port=27500，名取主机名
 go run . -pass 6666 -name 客厅PC -port 27500   # 自定义
 ```
 - macOS 首次运行需在「系统设置 → 隐私与安全 → 辅助功能」勾选运行进程（终端/IDE），否则无法移动光标。
-- Windows：`GOOS=windows GOARCH=amd64 go build -o rmserver.exe .` 后运行 `rmserver.exe -pass 1234`，已登录会话免授权。
+- Windows：`cd server; .\build.ps1` 出 `rmserver.exe`，运行 `.\rmserver.exe -pass 1234`(托盘) 或 `-notray`(控制台)；托盘可开机自启。构建/安装/删除见 [server/README](server/README.md)。
 - 启动后日志会打印 `password=...`、监听端口与 mDNS 名称。
 
 ### 2) 启动 iOS Client

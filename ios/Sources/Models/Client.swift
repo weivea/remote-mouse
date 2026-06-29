@@ -47,6 +47,10 @@ final class Client: ObservableObject {
     func button(_ b: String, _ down: Bool) { send(["t": "button", "b": b, "down": down]) }
     func scroll(_ dx: Int, _ dy: Int) { send(["t": "scroll", "dx": dx, "dy": dy]) }
     func text(_ s: String) { send(["t": "text", "s": s]) }
+    func key(_ code: Int, mods: Int = 0) {
+        send(["t": "key", "code": code, "down": true, "mods": mods])
+        send(["t": "key", "code": code, "down": false, "mods": mods])
+    }
     func ping() { send(["t": "ping", "ts": Int(Date().timeIntervalSince1970 * 1000)]) }
 
     private func send(_ obj: [String: Any]) {
@@ -94,3 +98,11 @@ final class Client: ObservableObject {
 }
 
 enum UIName { static var device: String { "iPhone" } }
+
+// Neutral keycodes/mods mirroring server/keys.go.
+enum K {
+    static let ctrl = 1, alt = 2, shift = 4, meta = 8
+    static let enter = 1, back = 2, tab = 3, esc = 4, del = 5
+    static let up = 10, down = 11, left = 12, right = 13
+    static let volDown = 200, volUp = 201, mute = 202, playPause = 203, next = 204, prev = 205
+}

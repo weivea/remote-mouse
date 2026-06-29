@@ -2,18 +2,18 @@
 
 > 单一事实来源：每次迭代结束更新此页，新会话先读这里。里程碑定义见 [10-roadmap](10-roadmap.md)。
 
-**更新时间**：2026-06-29 ｜ **状态**：M1+M2 完成（mac 端到端跑通）
+**更新时间**：2026-06-29 ｜ **状态**：M1+M2 完成；Windows server 真机注入跑通 + 全输入键盘 + 托盘自启
 
 ## 已实现
-- **协议** `proto/protocol-mvp.md`：单 TCP + 换行 JSON；PBKDF2-HMAC 挑战-响应认证；move/click/button/scroll/text/ping。
-- **Server** `server/`（Go）：mDNS 广播 + TCP 监听 + 认证 + 注入抽象。mac=CGEvent、Windows=SendInput、其它=日志桩。mac/Win 均编译通过。
-- **iOS** `ios/`（SwiftUI，xcodegen）：Bonjour 发现、密码/手动 IP、触控板（移动/左右键/滚动/文本）。模拟器构建+运行通过。
+- **协议** `proto/protocol-mvp.md`：单 TCP + 换行 JSON；PBKDF2-HMAC 挑战-响应认证；move/click/button/scroll/text/key/ping。key 含方向/编辑/F键/快捷键/媒体。
+- **Server** `server/`（Go）：mDNS 广播 + TCP 监听 + 认证 + 注入抽象。mac=CGEvent、Windows=SendInput（已修尺寸/批量/键盘/媒体，本机真机跑通）、其它=日志桩。Windows 托盘(systray)+注册表开机自启，`build.ps1` 出 rmserver.exe，`-notray` 控制台。
+- **iOS** `ios/`（SwiftUI，xcodegen）：Bonjour 发现、密码/手动 IP、触控板 + 按键栏(方向/回退/快捷/媒体)。
 
 ## 验证
 - 服务端握手/认证/ping、mDNS 广播 ✅
 - Swift PBKDF2+HMAC 与 Go 逐字节一致 ✅
-- iOS 构建成功、模拟器启动渲染正常 ✅
-- ⚠️ 真机同 WiFi、mac 注入（需辅助功能授权）、Windows 注入实机：未实测
+- Windows：go test 通过、smoke 客户端注入 move/text/key/快捷键无误、rmserver.exe 监听 ✅
+- ⚠️ mac key 注入与 iOS 按键栏未在 mac 实测；Windows 媒体/中文长测待补
 
 ## 已知缺口
 - 无 TLS / 数据面仍走 TCP（未上 UDP+AEAD）；移动事件无节流上限。

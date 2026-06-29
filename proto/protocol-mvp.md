@@ -33,8 +33,13 @@ iOS 客户端 ↔ Windows/macOS 服务端。范围：mDNS 发现 + 密码认证 
 | click | b | 单击（按下+抬起，便捷） |
 | scroll | dx,dy (int) | 滚动 |
 | text | s (string) | 文本输入（含中文/emoji，unicode 注入）|
-| key | code(int),mods(int) | 特殊键/快捷键（后续）|
+| key | code(int),down(bool),mods(int) | 特殊键/快捷键/媒体键 |
 | ping | ts(int ms) | 心跳；S→C 回 pong {ts} |
+
+- mods 位掩码：ctrl=1 alt=2 shift=4 meta(win/cmd)=8。printable 走 text。
+- code：字母 A–Z=65–90、数字 0–9=48–57（配 mods 快捷键，如 Ctrl+C=67/1）；
+  回车1 退格2 Tab3 Esc4 Del5；方向 上10下11左12右13；Home20 End21 PgUp22 PgDn23；
+  F1–F12=30–41；媒体 音量−200 音量+201 静音202 播放203 下204 上205。未知 code 忽略。
 
 - 高频 move 客户端节流合并；服务端最新优先。
 - 未知 t 忽略，保证前向兼容。版本在 hello/auth_ok 协商。
