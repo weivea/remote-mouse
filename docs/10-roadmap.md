@@ -2,16 +2,16 @@
 
 分多次会话推进，每阶段可独立验收。
 
-## M0 — 设计（当前）✅
-- 调研 + docs/。下个会话从这继续。
+## M0 — 设计 ✅
+- 调研 + docs/。
 
-## M1 — MVP 单平台直连
-- Server(选一台，Mac 或 Win)：TCP 监听 + robotgo/enigo 注入。
-- Client(Flutter)：手动输 IP，触控板移动+左键+滚动。
-- 验收：手机移动光标、点击。无加密无发现。
+## M1 — MVP 单平台直连 ✅
+- Server(Go)：TCP 监听 + 注入（mac CGEvent / win SendInput）。
+- Client(原生 SwiftUI)：手动输 IP，触控板移动+左右键+滚动+文本。
+- 现状：mac 端到端跑通。Client 由 Flutter 改为 iOS 原生 SwiftUI。
 
-## M2 — 发现 + 认证
-- mDNS announce/浏览；密码 HMAC 认证；TLS。
+## M2 — 发现 + 认证 ✅(mDNS+密码)
+- mDNS announce/浏览；密码 HMAC(PBKDF2) 挑战-响应。TLS 待补。
 - 验收：自动发现、密码连、错误被拒。
 
 ## M3 — 全输入 + 双平台 Server
