@@ -28,9 +28,42 @@ struct TouchpadView: View {
             TextField("输入文本回车发送", text: $typed)
                 .textFieldStyle(.roundedBorder).padding(.horizontal)
                 .onSubmit { if !typed.isEmpty { client.text(typed); typed = "" } }
+            keyBar
             Spacer(minLength: 0)
         }
         .padding(.vertical)
+    }
+
+    private var keyBar: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                key("delete.left", K.back)
+                key("arrow.up", K.up)
+                key("arrow.turn.down.left", K.enter)
+                key("escape", K.esc)
+            }
+            HStack(spacing: 6) {
+                key("arrow.left", K.left)
+                key("arrow.down", K.down)
+                key("arrow.right", K.right)
+            }
+            HStack(spacing: 6) {
+                Button("复制") { client.key(67, mods: K.ctrl) }
+                Button("粘贴") { client.key(86, mods: K.ctrl) }
+                Button("全选") { client.key(65, mods: K.ctrl) }
+            }.buttonStyle(.bordered).font(.footnote)
+            HStack(spacing: 6) {
+                key("speaker.minus", K.volDown)
+                key("playpause", K.playPause)
+                key("speaker.plus", K.volUp)
+            }
+        }.padding(.horizontal)
+    }
+
+    private func key(_ icon: String, _ code: Int) -> some View {
+        Button { client.key(code) } label: {
+            Image(systemName: icon).frame(maxWidth: .infinity).frame(height: 36)
+        }.buttonStyle(.bordered)
     }
 
     private var touchpad: some View {
