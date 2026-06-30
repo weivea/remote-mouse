@@ -13,6 +13,19 @@
 - 要求：管理员安装、服务常驻、CtrlAltDel/UAC 需服务级权限。
 - 风险：实现复杂、需签名、不同 Win 版本差异。MVP 后做。
 
+### 已实现（POC，2026-06-30）
+单一 `rmserver.exe` 三模式：默认托盘 UI / `-service`（LocalSystem，持 TCP+鉴权+事件解析+桌面监控）/ `-agent`（被服务用 `CreateProcessAsUser` 拉到当前输入桌面，复用 `SendInput`）。服务经命名管道把事件转发给 agent；锁屏时检测到 `Winlogon` 桌面即用 winlogon token 在安全桌面重开 agent，从 iPhone 输入 Hello PIN 解锁。设计与计划见 `docs/superpowers/specs/2026-06-30-windows-lock-screen-design.md`、`docs/superpowers/plans/2026-06-30-windows-lock-screen.md`。
+
+安装（管理员 PowerShell）：
+
+```powershell
+.\rmserver.exe -install-service -pass <密码> -port 27500   # 安装并启动
+.\rmserver.exe -uninstall-service                          # 停止并卸载
+```
+
+日志：`C:\ProgramData\RemoteMouse\service.log`、`agent.log`（按键内容脱敏，不记录 PIN）。
+仍是 POC：PIN 走明文 LAN，仅限可信网络；TLS 为紧随其后的下一步。
+
 ## macOS — 基本不可行 ❌（纯软件）
 - 登录窗/锁屏由 root 的 WindowServer 托管，`CGEventPost`/Accessibility **无法**注入，root 的 LaunchDaemon 也在 session 0 够不到。
 - ARD/VNC 也只能在登录后控制。SIP/TCC 封死，无官方旁路。
