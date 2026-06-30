@@ -1,14 +1,9 @@
 package main
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"flag"
-	"log"
 	"os"
 	"runtime"
-
-	"github.com/grandcat/zeroconf"
 )
 
 func platform() string {
@@ -22,38 +17,58 @@ func platform() string {
 	}
 }
 
+// appConfig holds parsed CLI configuration and selects the run mode.
+type appConfig struct {
+	name   string
+	pass   string
+	port   int
+	notray bool
+
+	service          bool
+	agent            bool
+	pipe             string
+	installService   bool
+	uninstallService bool
+	probeDesktop     bool
+	standalone       bool
+}
+
+// mode resolves the run mode from the flags. install/uninstall win over service
+// so an admin can (re)install without the SCM-launched copy interfering.
+func (c appConfig) mode() string {
+	switch {
+	case c.installService:
+		return "install-service"
+	case c.uninstallService:
+		return "uninstall-service"
+	case c.service:
+		return "service"
+	case c.agent:
+		return "agent"
+	case c.probeDesktop:
+		return "probe-desktop"
+	case c.standalone:
+		return "standalone"
+	default:
+		return "ui"
+	}
+}
+
 func main() {
 	host, _ := os.Hostname()
-	name := flag.String("name", sanitizeName(host), "device display name")
-	pass := flag.String("pass", "1234", "connection password")
-	port := flag.Int("port", 27500, "TCP control port")
-	notray := flag.Bool("notray", false, "console mode, no tray icon")
+	var cfg appConfig
+	flag.StringVar(&cfg.name, "name", sanitizeName(host), "device display name")
+	flag.StringVar(&cfg.pass, "pass", "1234", "connection password")
+	flag.IntVar(&cfg.port, "port", 27500, "TCP control port")
+	flag.BoolVar(&cfg.notray, "notray", false, "console mode, no tray icon")
+	flag.BoolVar(&cfg.service, "service", false, "run as the Windows service (LocalSystem)")
+	flag.BoolVar(&cfg.agent, "agent", false, "run as the injection agent on the input desktop")
+	flag.StringVar(&cfg.pipe, "pipe", `\\.\pipe\remotemouse-inject`, "named pipe for service<->agent IPC")
+	flag.BoolVar(&cfg.installService, "install-service", false, "install the Windows service (run as admin)")
+	flag.BoolVar(&cfg.uninstallService, "uninstall-service", false, "remove the Windows service (run as admin)")
+	flag.BoolVar(&cfg.probeDesktop, "probe-desktop", false, "print the current input desktop in a loop (dev)")
+	flag.BoolVar(&cfg.standalone, "standalone", false, "listen + inject in one process, Default desktop only (dev)")
 	flag.Parse()
 
-	devid := make([]byte, 8)
-	rand.Read(devid)
-	id := hex.EncodeToString(devid)
-
-	reg := NewClientRegistry()
-	srv := &Server{password: *pass, name: *name, inj: newInjector(), reg: reg}
-	defer srv.inj.Close()
-
-	zc, err := zeroconf.Register(*name, "_remotemouse._tcp", "local.", *port, []string{
-		"name=" + *name, "platform=" + platform(), "ver=0.1", "devid=" + id,
-	}, nil)
-	if err != nil {
-		log.Printf("mDNS announce failed (manual IP still works): %v", err)
-	} else {
-		defer zc.Shutdown()
-		log.Printf("mDNS announce: %q _remotemouse._tcp on %d", *name, *port)
-	}
-
-	log.Printf("password=%q  platform=%s  devid=%s", *pass, platform(), id)
-	go func() {
-		if err := srv.Listen(*port); err != nil {
-			log.Fatal(err)
-		}
-	}()
-	ips := DetectIPs()
-	runUI(*notray, *pass, *port, ips, reg)
+	run(cfg)
 }
