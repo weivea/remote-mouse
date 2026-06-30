@@ -80,23 +80,12 @@ func (s *Server) handle(c net.Conn) {
 			continue
 		}
 		switch m.T {
-		case "move":
-			s.inj.MoveRel(m.Dx, m.Dy)
-		case "button":
-			s.inj.Button(m.B, m.Down != nil && *m.Down)
-		case "click":
-			s.inj.Button(m.B, true)
-			s.inj.Button(m.B, false)
-		case "scroll":
-			s.inj.Scroll(m.Dx, m.Dy)
-		case "text":
-			s.inj.Text(m.S)
-		case "key":
-			s.inj.Key(m.Code, m.Mods, m.Down != nil && *m.Down)
 		case "ping":
 			s.send(c, map[string]any{"t": "pong", "ts": m.Ts})
 		case "bye":
 			return
+		default:
+			applyEvent(s.inj, m)
 		}
 	}
 	log.Printf("client disconnected: %s", addr)
