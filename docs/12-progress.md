@@ -25,7 +25,7 @@
 1. 收尾 M3：mac key 真机验证、Windows 媒体/中文长测、移动节流、双指/拖拽/灵敏度。
 2. 安全与传输：UDP 数据面 + 加密、TLS、认证失败限速。
 3. M4 体验：记住设备、重连、受信设备免密。
-4. 锁屏（Win SYSTEM 服务）：POC 已通（install/start → 解锁态注入 → Win+L 检测 Winlogon → 打 PIN 解锁）。收尾：TLS（PIN 明文 LAN 风险）、WTS 通知替代轮询、管道/HKLM ACL 收紧、服务签名+安装包。
+4. 锁屏（Win SYSTEM 服务）：POC 代码完成（install/start → 解锁态注入 → Win+L 检测 Winlogon → 打 PIN 解锁），**待真机端到端验证**。收尾：TLS（PIN 明文 LAN 风险）、acceptWithTimeout 超时后的孤儿连接、WTS 通知替代轮询、管道/HKLM ACL 收紧、服务签名+安装包。
 
 ## 续接清单
 README → proto/protocol-mvp.md → 本页 → 选下一里程碑。

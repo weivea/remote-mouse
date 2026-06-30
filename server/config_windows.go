@@ -38,6 +38,9 @@ func writeConfig(root registry.Key, cfg serverConfig) error {
 		return err
 	}
 	defer k.Close()
+	// TODO(security): the password is stored in HKLM as plaintext. For
+	// production, protect it (DPAPI/CryptProtectData) and/or tighten the key
+	// DACL so only LocalSystem/Administrators can read it.
 	if err := k.SetStringValue("Password", cfg.Password); err != nil {
 		return err
 	}

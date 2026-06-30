@@ -634,7 +634,7 @@ func TestReadConfigMissingKeyReturnsDefaults(t *testing.T) {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `go test ./... -run TestConfig -v`
+Run: `go test ./... -run Config -v`
 Expected: build failure — `undefined: serverConfig` / `undefined: readConfig`.
 
 - [ ] **Step 3: Create `server/config_windows.go`**
@@ -689,7 +689,7 @@ func writeConfig(root registry.Key, cfg serverConfig) error {
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `go test ./... -run TestConfig -v`
+Run: `go test ./... -run Config -v`
 Expected: PASS (both).
 
 - [ ] **Step 5: Full suite + vet**
