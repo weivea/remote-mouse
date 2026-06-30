@@ -15,15 +15,28 @@ struct DiscoveryView: View {
                     SecureField("连接密码", text: $password)
                         .textContentType(.password)
                 }
-                Section("发现的电脑") {
+                Section {
                     if discovery.servers.isEmpty {
-                        Text("搜索中…同一 WiFi 下应自动出现").foregroundStyle(.secondary)
+                        if discovery.isScanning {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                Text("扫描中…").foregroundStyle(.secondary)
+                            }
+                        } else {
+                            Text("未发现电脑，点击右上角刷新重新扫描").foregroundStyle(.secondary)
+                        }
                     }
                     ForEach(discovery.servers) { s in
                         Button { client.connect(endpoint: s.endpoint, password: password) } label: {
                             HStack { Image(systemName: "desktopcomputer"); Text(s.name); Spacer()
                                 Image(systemName: "chevron.right").foregroundStyle(.secondary) }
                         }
+                    }
+                } header: {
+                    HStack {
+                        Text("发现的电脑")
+                        Spacer()
+                        if discovery.isScanning { ProgressView().controlSize(.small) }
                     }
                 }
                 Section("手动连接") {
@@ -42,6 +55,14 @@ struct DiscoveryView: View {
                 }
             }
             .navigationTitle("Remote Mouse")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { discovery.refresh() } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .disabled(discovery.isScanning)
+                }
+            }
         }
         .onAppear { discovery.start() }
         .onDisappear { discovery.stop() }
