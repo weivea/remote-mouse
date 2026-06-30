@@ -11,7 +11,7 @@ func run(cfg appConfig) {
 	case "standalone":
 		serveStandalone(cfg)
 	case "probe-desktop":
-		log.Fatalf("probe-desktop not yet implemented") // Task 6
+		probeDesktop()
 	case "install-service":
 		log.Fatalf("install-service not yet implemented") // Task 8
 	case "uninstall-service":
