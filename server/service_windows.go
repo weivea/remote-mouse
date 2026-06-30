@@ -242,7 +242,12 @@ func (m *agentMonitor) killAgent() {
 	m.agentH, m.conn = 0, nil
 	m.mu.Unlock()
 
-	m.pi.setWriter(nil)
+	// Close the conn and terminate the agent BEFORE detaching the writer.
+	// pipeInjector.emit holds pi.mu across its pipe Write, so a hung-but-live
+	// agent could block that Write while holding pi.mu; calling setWriter(nil)
+	// first would then block on the same mutex and wedge the monitor goroutine.
+	// Closing conn unblocks the stuck Write, releasing pi.mu so setWriter(nil)
+	// can proceed (a concurrent emit to the closed conn just returns an error).
 	if conn != nil {
 		conn.Close()
 	}
@@ -250,6 +255,7 @@ func (m *agentMonitor) killAgent() {
 		windows.TerminateProcess(h, 0)
 		windows.CloseHandle(h)
 	}
+	m.pi.setWriter(nil)
 }
 
 func installService(cfg appConfig) error {
