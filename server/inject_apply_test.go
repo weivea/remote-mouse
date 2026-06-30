@@ -10,12 +10,20 @@ import (
 // test files in package main.
 type fakeInjector struct{ calls []string }
 
-func (f *fakeInjector) MoveRel(dx, dy int)            { f.calls = append(f.calls, fmt.Sprintf("move %d %d", dx, dy)) }
-func (f *fakeInjector) Button(b string, down bool)    { f.calls = append(f.calls, fmt.Sprintf("button %s %v", b, down)) }
-func (f *fakeInjector) Scroll(dx, dy int)             { f.calls = append(f.calls, fmt.Sprintf("scroll %d %d", dx, dy)) }
-func (f *fakeInjector) Text(s string)                 { f.calls = append(f.calls, "text "+s) }
-func (f *fakeInjector) Key(code, mods int, down bool) { f.calls = append(f.calls, fmt.Sprintf("key %d %d %v", code, mods, down)) }
-func (f *fakeInjector) Close()                        {}
+func (f *fakeInjector) MoveRel(dx, dy int) {
+	f.calls = append(f.calls, fmt.Sprintf("move %d %d", dx, dy))
+}
+func (f *fakeInjector) Button(b string, down bool) {
+	f.calls = append(f.calls, fmt.Sprintf("button %s %v", b, down))
+}
+func (f *fakeInjector) Scroll(dx, dy int) {
+	f.calls = append(f.calls, fmt.Sprintf("scroll %d %d", dx, dy))
+}
+func (f *fakeInjector) Text(s string) { f.calls = append(f.calls, "text "+s) }
+func (f *fakeInjector) Key(code, mods int, down bool) {
+	f.calls = append(f.calls, fmt.Sprintf("key %d %d %v", code, mods, down))
+}
+func (f *fakeInjector) Close() {}
 
 // bptr returns a pointer to b, for the *bool fields on In.
 func bptr(b bool) *bool { return &b }
