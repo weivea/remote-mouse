@@ -13,13 +13,17 @@ func run(cfg appConfig) {
 	case "probe-desktop":
 		probeDesktop()
 	case "install-service":
-		log.Fatalf("install-service not yet implemented") // Task 8
+		if err := installService(cfg); err != nil {
+			log.Fatalf("install-service: %v", err)
+		}
 	case "uninstall-service":
-		log.Fatalf("uninstall-service not yet implemented") // Task 8
+		if err := uninstallService(); err != nil {
+			log.Fatalf("uninstall-service: %v", err)
+		}
 	case "service":
-		log.Fatalf("service not yet implemented") // Task 8
+		runService(cfg)
 	case "agent":
-		log.Fatalf("agent not yet implemented") // Task 8
+		runAgent(cfg)
 	default: // "ui": today's listen+inject+tray; becomes UI-only in Task 9
 		serveStandalone(cfg)
 	}
