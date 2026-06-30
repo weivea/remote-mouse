@@ -41,3 +41,20 @@ func TestApplyEventCoversAllPointerAndKeyTypes(t *testing.T) {
 		t.Fatalf("calls = %v, want %v", f.calls, want)
 	}
 }
+
+func TestApplyEventButtonNilDownIsUp(t *testing.T) {
+	f := &fakeInjector{}
+	applyEvent(f, In{T: "button", B: "left"}) // Down omitted -> treated as up/false
+	want := []string{"button left false"}
+	if !reflect.DeepEqual(f.calls, want) {
+		t.Fatalf("calls = %v, want %v", f.calls, want)
+	}
+}
+
+func TestApplyEventUnknownTypeIsNoop(t *testing.T) {
+	f := &fakeInjector{}
+	applyEvent(f, In{T: "bogus"})
+	if len(f.calls) != 0 {
+		t.Fatalf("unknown type produced calls: %v", f.calls)
+	}
+}
