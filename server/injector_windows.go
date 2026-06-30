@@ -3,6 +3,8 @@
 package main
 
 import (
+	"log"
+	"sync/atomic"
 	"syscall"
 	"unsafe"
 )
@@ -32,8 +34,11 @@ const (
 	wheelDelta = 120
 )
 
-// input matches Win32 INPUT; the union is sized to MOUSEINPUT (the largest
-// variant we use). Keyboard fields are written via keybdInput overlay.
+// input matches Win32 INPUT exactly (x64: 40 bytes). The mi field doubles as
+// the union, sized to MOUSEINPUT (the largest variant we use); keyboard events
+// are written over it via a keybdInput overlay. The struct sizes must match the
+// Win32 types exactly, because SendInput rejects calls whose cbSize differs from
+// sizeof(INPUT) and then injects nothing.
 type input struct {
 	typ uint32
 	mi  mouseInput
@@ -44,21 +49,27 @@ type mouseInput struct {
 	flags     uint32
 	time      uint32
 	extra     uintptr
-	_         uint32
 }
 type keybdInput struct {
 	vk, scan uint16
 	flags    uint32
 	time     uint32
 	extra    uintptr
-	_, _     uint32
 }
+
+var sendInputWarned int32
 
 func sendMany(ins []input) {
 	if len(ins) == 0 {
 		return
 	}
-	procSendInput.Call(uintptr(len(ins)), uintptr(unsafe.Pointer(&ins[0])), unsafe.Sizeof(ins[0]))
+	n, _, err := procSendInput.Call(uintptr(len(ins)), uintptr(unsafe.Pointer(&ins[0])), unsafe.Sizeof(ins[0]))
+	// SendInput returns the number of events actually inserted; a short count
+	// means the injection was blocked (e.g. wrong cbSize, or UIPI when the
+	// foreground window is elevated). Log once so it isn't a silent no-op.
+	if int(n) != len(ins) && atomic.CompareAndSwapInt32(&sendInputWarned, 0, 1) {
+		log.Printf("SendInput injected %d/%d events (input blocked): %v", int(n), len(ins), err)
+	}
 }
 
 func mouse(mi mouseInput) input { return input{typ: inputMouse, mi: mi} }
