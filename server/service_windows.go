@@ -112,6 +112,13 @@ func runServiceCore(cfg appConfig, stop <-chan struct{}) {
 		}
 	}()
 
+	// The service owns the network, so it must also advertise over mDNS;
+	// otherwise the phone's Bonjour discovery finds nothing once installed and
+	// the user is forced to type the IP by hand. Non-fatal: manual IP still works.
+	if zc := announceMDNS(cfg, newDevID()); zc != nil {
+		defer zc.Shutdown()
+	}
+
 	mon := &agentMonitor{exe: selfPath(), pipe: cfg.pipe, ln: ln, pi: pi}
 	mon.run(stop)
 }
