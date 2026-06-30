@@ -1,6 +1,7 @@
 # Go
 /server/rmserver
 *.exe
+*.exe~
 # iOS / Xcode
 ios/RemoteMouse.xcodeproj/
 DerivedData/
