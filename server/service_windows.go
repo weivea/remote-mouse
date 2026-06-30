@@ -282,6 +282,9 @@ func installService(cfg appConfig) error {
 		return fmt.Errorf("create service: %w", err)
 	}
 	defer s.Close()
+	if err := s.Start(); err != nil {
+		log.Printf("service created but start failed: %v", err)
+	}
 	fmt.Printf("installed service %q -> %s -service (port %d)\n", svcName, exepath, cfg.port)
 	return nil
 }

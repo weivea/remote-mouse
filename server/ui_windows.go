@@ -192,6 +192,24 @@ func runUI(notray bool, pass string, port int, ips HostIPs, reg *ClientRegistry)
 		})
 		ni.ContextMenu().Actions().Add(autoAct)
 
+		// Service control: lock-screen-capable injection runs in the SYSTEM service.
+		svcStatus := walk.NewAction()
+		svcStatus.SetText("服务状态：" + serviceState())
+		svcStatus.SetEnabled(false)
+		ni.ContextMenu().Actions().Add(svcStatus)
+
+		svcInstall := walk.NewAction()
+		svcInstall.SetText("安装并启动服务")
+		svcInstall.Triggered().Attach(func() {
+			elevatedSelf("-install-service", "-pass", pass, "-port", strconv.Itoa(port))
+		})
+		ni.ContextMenu().Actions().Add(svcInstall)
+
+		svcUninstall := walk.NewAction()
+		svcUninstall.SetText("卸载服务")
+		svcUninstall.Triggered().Attach(func() { elevatedSelf("-uninstall-service") })
+		ni.ContextMenu().Actions().Add(svcUninstall)
+
 		ni.ContextMenu().Actions().Add(walk.NewSeparatorAction())
 
 		quitAct := walk.NewAction()

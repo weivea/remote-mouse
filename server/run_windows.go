@@ -24,7 +24,7 @@ func run(cfg appConfig) {
 		runService(cfg)
 	case "agent":
 		runAgent(cfg)
-	default: // "ui": today's listen+inject+tray; becomes UI-only in Task 9
-		serveStandalone(cfg)
+	default: // "ui"
+		serveUI(cfg)
 	}
 }
