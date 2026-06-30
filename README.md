@@ -2,7 +2,7 @@
 
 把手机变成 PC 的无线触控板 + 键盘。Server 装在电脑（Windows/macOS），Client 是手机 App（iOS），同一 WiFi 下发现、密码认证后控制光标与键盘。
 
-> M1/M2 已落地，M3 部分完成：iOS(SwiftUI) ↔ Go 服务端，mDNS 发现 + 密码认证 + 鼠标/滚动/文本/键盘事件；mac 端到端可跑通，Windows SendInput 真机注入、托盘与开机自启已完成。设计文档见 [`docs/`](docs/README.md)。
+> M1/M2 已落地，M3 部分完成：iOS(SwiftUI) ↔ Go 服务端，mDNS 发现 + 密码认证 + 鼠标/滚动/文本/键盘事件；mac 端到端可跑通，Windows SendInput 真机注入、可视化窗口/托盘 UI 与开机自启已完成。设计文档见 [`docs/`](docs/README.md)。
 
 ## 目录
 - [proto/](proto/protocol-mvp.md) — MVP 通信协议
@@ -21,7 +21,7 @@ go run . -pass 1234            # 默认 port=27500，名取主机名
 go run . -pass 6666 -name 客厅PC -port 27500   # 自定义
 ```
 - macOS 首次运行需在「系统设置 → 隐私与安全 → 辅助功能」勾选运行进程（终端/IDE），否则无法移动光标。
-- Windows：`cd server; .\build.ps1` 出 `rmserver.exe`，运行 `.\rmserver.exe -pass 1234`(托盘) 或 `-notray`(控制台)；托盘可开机自启。构建/安装/删除见 [server/README](server/README.md)。
+- Windows：`cd server; .\build.ps1` 出 `rmserver.exe`，运行 `.\rmserver.exe -pass 1234`(窗口+托盘) 或 `-notray`(纯后台)；主窗口显示 IP/端口/密码与在线设备，托盘可开机自启。构建/安装/删除见 [server/README](server/README.md)。
 - 启动后日志会打印 `password=...`、监听端口与 mDNS 名称。
 
 ### 2) 启动 iOS Client

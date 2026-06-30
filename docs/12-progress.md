@@ -2,11 +2,11 @@
 
 > 单一事实来源：每次迭代结束更新此页，新会话先读这里。里程碑定义见 [10-roadmap](10-roadmap.md)。
 
-**更新时间**：2026-06-29 ｜ **状态**：M1+M2 完成；M3 部分完成（Windows server 真机注入 + 键盘/快捷/媒体映射 + 托盘自启，iOS 按键栏）
+**更新时间**：2026-06-30 ｜ **状态**：M1+M2 完成；M3 部分完成（Windows server 真机注入 + 键盘/快捷/媒体映射 + 可视化窗口/托盘 UI + 自启，iOS 按键栏）
 
 ## 已实现
 - **协议** `proto/protocol-mvp.md`：单 TCP + 换行 JSON；PBKDF2-HMAC 挑战-响应认证；move/click/button/scroll/text/key/ping。key 含方向/编辑/F键/快捷键/媒体。
-- **Server** `server/`（Go）：mDNS 广播 + TCP 监听 + 认证 + 注入抽象。mac=CGEvent、Windows=SendInput（已修尺寸/批量/键盘/媒体，本机真机跑通）、其它=日志桩。Windows 托盘(systray)+注册表开机自启，`build.ps1` 出 rmserver.exe，`-notray` 控制台。
+- **Server** `server/`（Go）：mDNS 广播 + TCP 监听 + 认证 + 注入抽象。mac=CGEvent、Windows=SendInput（已修尺寸/批量/键盘/媒体，本机真机跑通）、其它=日志桩。Windows 用 `lxn/walk` 原生窗口 + 托盘 UI：展示推荐 IP/端口/密码（一键复制）与实时在线设备列表（`ClientRegistry` 连接中枢 + `netinfo` IP 探测），注册表开机自启；`build.ps1`（嵌入清单+图标）出 rmserver.exe，`-notray` 纯后台。
 - **iOS** `ios/`（SwiftUI，xcodegen）：Bonjour 发现、密码/手动 IP、触控板 + 按键栏(方向/回退/快捷/媒体)。
 
 ## 验证
