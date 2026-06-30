@@ -45,7 +45,7 @@ func setAutostart(on bool, pass string, port int) {
 }
 
 // runUI blocks on the tray loop (or forever when notray). Listening runs in a goroutine.
-func runUI(notray bool, pass string, port int) {
+func runUI(notray bool, pass string, port int, ips HostIPs, reg *ClientRegistry) {
 	if notray {
 		select {}
 	}

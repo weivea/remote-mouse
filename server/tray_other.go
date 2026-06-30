@@ -3,4 +3,4 @@
 package main
 
 // Non-Windows builds have no tray: just block forever while listen runs.
-func runUI(notray bool, pass string, port int) { select {} }
+func runUI(notray bool, pass string, port int, ips HostIPs, reg *ClientRegistry) { select {} }

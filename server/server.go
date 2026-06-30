@@ -23,6 +23,7 @@ type Server struct {
 	password string
 	name     string
 	inj      Injector
+	reg      *ClientRegistry
 }
 
 func deriveProof(password string, salt, nonce []byte) string {
@@ -67,6 +68,11 @@ func (s *Server) handle(c net.Conn) {
 	}
 	s.send(c, map[string]any{"t": "auth_ok", "server": s.name, "ver": "0.1"})
 	log.Printf("client connected: %s (%s)", hello.Name, addr)
+
+	if s.reg != nil {
+		cid := s.reg.Register(hello.Name, ipOf(addr))
+		defer s.reg.Deregister(cid)
+	}
 
 	for r.Scan() {
 		var m In
@@ -118,3 +124,11 @@ func (s *Server) Listen(port int) error {
 }
 
 func sanitizeName(n string) string { return strings.TrimSpace(n) }
+
+// ipOf returns the host part of a net.Addr, dropping the port.
+func ipOf(a net.Addr) string {
+	if h, _, err := net.SplitHostPort(a.String()); err == nil {
+		return h
+	}
+	return a.String()
+}

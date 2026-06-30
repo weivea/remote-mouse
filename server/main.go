@@ -34,7 +34,8 @@ func main() {
 	rand.Read(devid)
 	id := hex.EncodeToString(devid)
 
-	srv := &Server{password: *pass, name: *name, inj: newInjector()}
+	reg := NewClientRegistry()
+	srv := &Server{password: *pass, name: *name, inj: newInjector(), reg: reg}
 	defer srv.inj.Close()
 
 	zc, err := zeroconf.Register(*name, "_remotemouse._tcp", "local.", *port, []string{
@@ -53,5 +54,6 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	runUI(*notray, *pass, *port)
+	ips := DetectIPs()
+	runUI(*notray, *pass, *port, ips, reg)
 }
