@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"golang.org/x/sys/windows/registry"
 )
@@ -15,9 +16,9 @@ const runVal = "RemoteMouse"
 
 func autostartCmd(pass string, port int, name string) string {
 	exe, _ := os.Executable()
-	cmd := `"` + exe + `" -pass ` + pass + " -port " + strconv.Itoa(port)
+	cmd := syscall.EscapeArg(exe) + " -pass " + syscall.EscapeArg(pass) + " -port " + strconv.Itoa(port)
 	if strings.TrimSpace(name) != "" {
-		cmd += ` -name "` + name + `"`
+		cmd += " -name " + syscall.EscapeArg(name)
 	}
 	return cmd
 }
