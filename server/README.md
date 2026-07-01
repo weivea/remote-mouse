@@ -36,5 +36,14 @@ SendInput 注入，无需额外授权（已登录会话）。支持鼠标/滚动
    ```
 2. 删除 exe 与目录即可（无注册表残留）。
 
+## 锁屏注入（Win SYSTEM 服务，M5 POC）
+锁屏/登录界面运行在受保护的安全桌面，普通进程注入被系统禁止。方案：把 `rmserver.exe` 装成 **LocalSystem 服务**，服务持 TCP + 鉴权 + 事件解析，经命名管道把事件转发给按当前输入桌面（`Default`/`Winlogon`…）动态重开的 `-agent` 进程，由 agent 在该桌面 `SendInput`；锁屏时切到 winlogon token 的安全桌面 agent，从 iPhone 输入 Hello PIN 解锁。
+
+```powershell
+.\rmserver.exe -install-service -pass 1234 -port 27500   # 安装并自动启动（管理员）
+.\rmserver.exe -uninstall-service                         # 停止并卸载（管理员）
+```
+日志：`C:\ProgramData\RemoteMouse\{service,agent}.log`（不记录 PIN）。完整**真机验证清单**见 [docs/09-lock-screen.md](../docs/09-lock-screen.md)。仍是 POC：PIN 走明文 LAN，仅限可信网络，TLS 待补。
+
 ## 现状
-mac 端到端跑通；Windows 真机注入（鼠标/滚动/文本/键盘/快捷键）已验证。锁屏注入（Win SYSTEM 服务）属后续里程碑。
+mac 端到端跑通；Windows 真机注入（鼠标/滚动/文本/键盘/快捷键）已验证。锁屏注入（Win SYSTEM 服务，M5 POC）代码已完成，待真机端到端验证。

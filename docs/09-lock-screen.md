@@ -26,6 +26,19 @@
 日志：`C:\ProgramData\RemoteMouse\service.log`、`agent.log`（按键内容脱敏，不记录 PIN）。
 仍是 POC：PIN 走明文 LAN，仅限可信网络；TLS 为紧随其后的下一步。
 
+### 真机验证清单（管理员 PowerShell）
+锁屏注入必须以 LocalSystem 服务运行，需管理员权限，且只能真机验证（子代理/CI 无法自动化）。
+
+1. 构建：`cd server; .\build.ps1` 出 `rmserver.exe`。
+2. 安装并启动：`.\rmserver.exe -install-service -pass 1234 -port 27500`（自动启动）；`sc.exe query RemoteMouse` 期望 `STATE: 4 RUNNING`。
+3. 查 `service.log`，应依次出现 `service log opened`、`config: port=27500 (password loaded from HKLM)`、`mDNS announce: ...`、`agent bound to session=N desktop="Default"`。
+4. 解锁态验证控制：iPhone 连接（自动发现或手填 `本机IP:27500`，密码 1234）→ 移动/点击/滚动/打字均正常。
+5. 锁屏验证：`Win+L` → service.log 出现 `desktop change -> ... desktop="Winlogon"` 然后 `agent bound to ... desktop="Winlogon"` → iPhone 输入 Hello PIN → 解锁。
+6. 解锁后：service.log 回到 `desktop="Default"`，控制自动跟回。
+7. 卸载：`.\rmserver.exe -uninstall-service`（自动停止 + 删除）。
+
+排障：不解锁时看 `service.log` / `agent.log`（`agent connected; injecting on this desktop` 表示 agent 已在该桌面就绪），日志不记录 PIN 内容；最可能的失败点是 winlogon token 获取或安全桌面上的 agent spawn。
+
 ## macOS — 基本不可行 ❌（纯软件）
 - 登录窗/锁屏由 root 的 WindowServer 托管，`CGEventPost`/Accessibility **无法**注入，root 的 LaunchDaemon 也在 session 0 够不到。
 - ARD/VNC 也只能在登录后控制。SIP/TCC 封死，无官方旁路。
