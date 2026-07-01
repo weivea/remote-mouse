@@ -11,6 +11,7 @@ const configPath = `SOFTWARE\RemoteMouse`
 type serverConfig struct {
 	Password string
 	Port     int
+	Name     string
 }
 
 // readConfig reads connection config from root\SOFTWARE\RemoteMouse. On any
@@ -28,6 +29,9 @@ func readConfig(root registry.Key) (serverConfig, error) {
 	if n, _, err := k.GetIntegerValue("Port"); err == nil {
 		cfg.Port = int(n)
 	}
+	if s, _, err := k.GetStringValue("Name"); err == nil {
+		cfg.Name = s
+	}
 	return cfg, nil
 }
 
@@ -42,6 +46,9 @@ func writeConfig(root registry.Key, cfg serverConfig) error {
 	// production, protect it (DPAPI/CryptProtectData) and/or tighten the key
 	// DACL so only LocalSystem/Administrators can read it.
 	if err := k.SetStringValue("Password", cfg.Password); err != nil {
+		return err
+	}
+	if err := k.SetStringValue("Name", cfg.Name); err != nil {
 		return err
 	}
 	return k.SetDWordValue("Port", uint32(cfg.Port))

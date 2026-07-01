@@ -13,7 +13,7 @@ func TestConfigRoundTripUnderHKCU(t *testing.T) {
 	root := registry.CURRENT_USER
 	defer registry.DeleteKey(root, configPath)
 
-	want := serverConfig{Password: "s3cret", Port: 28000}
+	want := serverConfig{Password: "s3cret", Port: 28000, Name: "客厅PC"}
 	if err := writeConfig(root, want); err != nil {
 		t.Fatalf("writeConfig: %v", err)
 	}
