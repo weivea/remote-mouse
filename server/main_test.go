@@ -15,6 +15,11 @@ func TestAppConfigMode(t *testing.T) {
 		{"uninstall", appConfig{uninstallService: true}, "uninstall-service"},
 		{"probe", appConfig{probeDesktop: true}, "probe-desktop"},
 		{"standalone", appConfig{standalone: true}, "standalone"},
+		{"start-service", appConfig{startService: true}, "start-service"},
+		{"stop-service", appConfig{stopService: true}, "stop-service"},
+		{"set-start-type", appConfig{setStartType: "auto"}, "set-start-type"},
+		{"apply-config", appConfig{applyConfig: true}, "apply-config"},
+		{"install wins over start", appConfig{installService: true, startService: true}, "install-service"},
 		{"install wins over service", appConfig{installService: true, service: true}, "install-service"},
 	}
 	for _, c := range cases {

@@ -20,6 +20,26 @@ func run(cfg appConfig) {
 		if err := uninstallService(); err != nil {
 			log.Fatalf("uninstall-service: %v", err)
 		}
+	case "start-service":
+		if err := startService(); err != nil {
+			log.Fatalf("start-service: %v", err)
+		}
+	case "stop-service":
+		if err := stopService(); err != nil {
+			log.Fatalf("stop-service: %v", err)
+		}
+	case "set-start-type":
+		t, ok := startTypeFromArg(cfg.setStartType)
+		if !ok {
+			log.Fatalf("set-start-type: invalid value %q (want auto|manual|disabled)", cfg.setStartType)
+		}
+		if err := setStartType(t); err != nil {
+			log.Fatalf("set-start-type: %v", err)
+		}
+	case "apply-config":
+		if err := applyConfigElevated(cfg); err != nil {
+			log.Fatalf("apply-config: %v", err)
+		}
 	case "service":
 		runService(cfg)
 	case "agent":

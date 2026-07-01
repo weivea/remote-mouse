@@ -33,6 +33,10 @@ type appConfig struct {
 	probeDesktop     bool
 	standalone       bool
 	injectLog        bool
+	startService     bool
+	stopService      bool
+	setStartType     string
+	applyConfig      bool
 }
 
 // mode resolves the run mode from the flags. install/uninstall win over service
@@ -43,6 +47,14 @@ func (c appConfig) mode() string {
 		return "install-service"
 	case c.uninstallService:
 		return "uninstall-service"
+	case c.startService:
+		return "start-service"
+	case c.stopService:
+		return "stop-service"
+	case c.setStartType != "":
+		return "set-start-type"
+	case c.applyConfig:
+		return "apply-config"
 	case c.service:
 		return "service"
 	case c.agent:
@@ -72,6 +84,10 @@ func main() {
 	flag.BoolVar(&cfg.probeDesktop, "probe-desktop", false, "print the current input desktop in a loop (dev)")
 	flag.BoolVar(&cfg.standalone, "standalone", false, "listen + inject in one process, Default desktop only (dev)")
 	flag.BoolVar(&cfg.injectLog, "injectlog", false, "agent: verbose per-event injection logging (diagnostic)")
+	flag.BoolVar(&cfg.startService, "start-service", false, "start the Windows service (run as admin)")
+	flag.BoolVar(&cfg.stopService, "stop-service", false, "stop the Windows service (run as admin)")
+	flag.StringVar(&cfg.setStartType, "set-start-type", "", "set service start type: auto|manual|disabled (run as admin)")
+	flag.BoolVar(&cfg.applyConfig, "apply-config", false, "write HKLM config and restart the service if running (run as admin)")
 	flag.Parse()
 
 	run(cfg)
