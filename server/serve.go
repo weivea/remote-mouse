@@ -6,7 +6,7 @@ import (
 	"log"
 	"net"
 
-	"github.com/grandcat/zeroconf"
+	"github.com/libp2p/zeroconf/v2"
 )
 
 // serveStandalone runs the original single-process behavior: announce over
