@@ -17,3 +17,16 @@ func TestTokenStrategyFor(t *testing.T) {
 		}
 	}
 }
+
+func TestDesktopForFlags(t *testing.T) {
+	cases := map[int32]string{
+		wtsStateLock:   "Winlogon",
+		wtsStateUnlock: "Default",
+		42:             "Default", // unknown/other -> treat as unlocked
+	}
+	for flags, want := range cases {
+		if got := desktopForFlags(flags); got != want {
+			t.Errorf("desktopForFlags(%d) = %q, want %q", flags, got, want)
+		}
+	}
+}

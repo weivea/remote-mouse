@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"syscall"
 	"time"
@@ -20,11 +21,24 @@ var (
 
 const uoiName = 2 // UOI_NAME
 
+var (
+	modWtsapi32              = windows.NewLazySystemDLL("wtsapi32.dll")
+	procWTSQuerySessionInfoW = modWtsapi32.NewProc("WTSQuerySessionInformationW")
+)
+
+const (
+	wtsSessionInfoEx        = 25         // WTS_INFO_CLASS: WTSSessionInfoEx
+	wtsStateLock     int32  = 0          // WTS_SESSIONSTATE_LOCK   (Windows 8+; reversed on Win7)
+	wtsStateUnlock   int32  = 1          // WTS_SESSIONSTATE_UNLOCK
+	wtsNoSession     uint32 = 0xFFFFFFFF // WTSGetActiveConsoleSessionId: no session attached
+)
+
 // currentInputDesktop returns the name of the desktop currently receiving user
-// input: "Default" when unlocked, "Winlogon" on the lock/login secure desktop,
-// or "Screen-saver". Reading the name needs no special privilege, but a normal
-// user-session process may be denied OpenInputDesktop while a secure desktop is
-// active — the SYSTEM service is the authoritative caller.
+// input in the CALLER'S session: "Default" when unlocked, "Winlogon" on the
+// lock/login secure desktop, or "Screen-saver". It only works from an
+// interactive session (the -probe-desktop dev mode); a session-0 service is on
+// window station Service-0x0-3e7$ and cannot observe the interactive input
+// desktop this way, so the service uses consoleDesktop/sessionLockState instead.
 func currentInputDesktop() (string, error) {
 	hd, _, err := procOpenInputDesktop.Call(0, 0, uintptr(windows.GENERIC_READ))
 	if hd == 0 {
@@ -48,6 +62,48 @@ func currentInputDesktop() (string, error) {
 
 // activeConsoleSession returns the session attached to the physical console.
 func activeConsoleSession() uint32 { return windows.WTSGetActiveConsoleSessionId() }
+
+// sessionLockState returns the raw WTSINFOEX.SessionFlags for a session.
+// WTSQuerySessionInformation works from the session-0 service (unlike
+// OpenInputDesktop), so this is how the service learns whether the console
+// session is on the secure/lock desktop.
+func sessionLockState(sess uint32) (flags int32, err error) {
+	if sess == wtsNoSession {
+		return 0, fmt.Errorf("no active console session")
+	}
+	var buf unsafe.Pointer
+	var n uint32
+	r, _, e := procWTSQuerySessionInfoW.Call(0, uintptr(sess), wtsSessionInfoEx,
+		uintptr(unsafe.Pointer(&buf)), uintptr(unsafe.Pointer(&n)))
+	if r == 0 {
+		return 0, e
+	}
+	defer windows.WTSFreeMemory(uintptr(buf))
+	// WTSINFOEXW (amd64): DWORD Level @0, 4-byte pad, WTSINFOEX_LEVEL1_W @8 whose
+	// LONG SessionFlags sits at offset 16.
+	return *(*int32)(unsafe.Add(buf, 16)), nil
+}
+
+// desktopForFlags maps WTSINFOEX.SessionFlags to the desktop the service must
+// target for injection: a locked session is on the "Winlogon" secure desktop,
+// anything else is the ordinary "Default" desktop.
+func desktopForFlags(flags int32) string {
+	if flags == wtsStateLock {
+		return "Winlogon"
+	}
+	return "Default"
+}
+
+// consoleDesktop reports the desktop the service should bind an agent to for the
+// given console session, derived from its lock state. Returns the raw flags for
+// diagnostics.
+func consoleDesktop(sess uint32) (desk string, flags int32, err error) {
+	flags, err = sessionLockState(sess)
+	if err != nil {
+		return "", 0, err
+	}
+	return desktopForFlags(flags), flags, nil
+}
 
 type tokenStrategy int
 

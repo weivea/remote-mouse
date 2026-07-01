@@ -138,6 +138,8 @@ type agentMonitor struct {
 	curDesk string
 	agentH  windows.Handle
 	conn    net.Conn
+
+	lastErrLog time.Time // monitor goroutine only; rate-limits detect-error logs
 }
 
 func (m *agentMonitor) run(stop <-chan struct{}) {
@@ -156,9 +158,13 @@ func (m *agentMonitor) run(stop <-chan struct{}) {
 
 func (m *agentMonitor) reconcile() {
 	sess := activeConsoleSession()
-	desk, err := currentInputDesktop()
+	desk, flags, err := consoleDesktop(sess)
 	if err != nil {
-		return // transient during a secure-desktop switch; retry next tick
+		if time.Since(m.lastErrLog) > 5*time.Second {
+			log.Printf("desktop detect (session=%d): %v", sess, err)
+			m.lastErrLog = time.Now()
+		}
+		return // retry next tick
 	}
 	m.mu.Lock()
 	same := sess == m.curSess && desk == m.curDesk
@@ -166,7 +172,7 @@ func (m *agentMonitor) reconcile() {
 	if same && m.agentAlive() {
 		return
 	}
-	log.Printf("desktop change -> session=%d desktop=%q (was %d/%q)", sess, desk, m.curSess, m.curDesk)
+	log.Printf("desktop change -> session=%d desktop=%q flags=%d (was %d/%q)", sess, desk, flags, m.curSess, m.curDesk)
 	m.respawn(sess, desk)
 }
 
