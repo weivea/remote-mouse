@@ -12,23 +12,24 @@ import (
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
-// serveUI is the default (no-flag) mode. When the RemoteMouse service is
-// installed and running it owns the TCP port and mDNS, so this acts as a
-// controller UI only (status from HKLM), avoiding a fight for port 27500.
-// Otherwise it serves directly — announce + listen + inject on the unlocked
-// desktop — restoring the simple single-process mode so the phone can discover
-// it without installing the service.
+// serveUI is the default (no-flag) mode: it opens the control panel. Serving
+// (owning the TCP port) is arbitrated inside the panel by a servingController
+// that follows the service state, so we never double-bind the port.
 func serveUI(cfg appConfig) {
-	if serviceRunning() {
+	// Prefer persisted HKLM config when the service is installed, so the panel
+	// shows the values the service actually uses.
+	if serviceInstalled() {
 		if sc, err := readConfig(registry.LOCAL_MACHINE); err == nil {
 			cfg.pass, cfg.port = sc.Password, sc.Port
+			if sc.Name != "" {
+				cfg.name = sc.Name
+			}
 		}
-		ips := DetectIPs()
-		reg := NewClientRegistry()
-		runUI(cfg.notray, cfg.pass, cfg.port, ips, reg)
-		return
 	}
-	serveStandalone(cfg)
+	reg := NewClientRegistry()
+	ctrl := newServingController(cfg, reg)
+	ips := DetectIPs()
+	runControlPanel(cfg, ctrl, reg, ips)
 }
 
 // elevatedArgLine builds a Windows command line from args, quoting/escaping each
