@@ -120,11 +120,21 @@ func (c *servingController) Apply(next appConfig) {
 		ln, err := net.Listen("tcp", listenAddr(nc.Port))
 		if err != nil {
 			log.Printf("serving controller: rebind tcp/%d failed: %v", nc.Port, err)
-			// Keep old listener closed; re-open old port as best effort.
+			// Best effort: re-open the old port so we keep serving there.
 			if ln2, e2 := net.Listen("tcp", listenAddr(old.Port)); e2 == nil {
 				c.ln = ln2
 				c.cfg.Port = old.Port
+				// mDNS still advertises the old identity; revert the name so the
+				// server and the announcement stay consistent.
+				c.cfg.Name = old.Name
+				c.srv.SetName(old.Name)
 				go c.srv.Serve(ln2)
+			} else {
+				// Both binds failed: drop to a clean stopped state so the
+				// StatusTicker's next Start() can retry from scratch.
+				log.Printf("serving controller: rollback tcp/%d also failed: %v", old.Port, e2)
+				c.ln = nil
+				c.running = false
 			}
 			return
 		}

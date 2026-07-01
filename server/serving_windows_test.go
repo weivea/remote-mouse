@@ -120,9 +120,56 @@ func TestServingControllerLifecycle(t *testing.T) {
 	if !waitFor(func() bool { return dialAuth(t, p2, "new") }) {
 		t.Error("must accept on p2 after port change")
 	}
+	if dialAuth(t, p1, "new") {
+		t.Error("old port p1 must be released after successful rebind to p2")
+	}
 
 	c.Stop()
 	if waitFor(func() bool { return dialAuth(t, p2, "new") }) {
 		t.Error("must not accept after Stop")
+	}
+}
+
+// TestServingControllerRebindFailureRollback forces the new-port bind to fail
+// (by pre-occupying the target port) and asserts the controller rolls back to
+// the old port, recovers serving there, and keeps cfg (port+name) consistent.
+func TestServingControllerRebindFailureRollback(t *testing.T) {
+	p1 := freePort(t)
+	c := newServingController(appConfig{pass: "pw", name: "PC", port: p1}, NewClientRegistry())
+	if err := c.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer c.Stop()
+	if !waitFor(func() bool { return dialAuth(t, p1, "pw") }) {
+		t.Fatal("not serving on p1 after Start")
+	}
+
+	// Occupy p2 (same address form the controller uses) so the rebind fails,
+	// forcing rollback to p1.
+	p2 := freePort(t)
+	blocker, err := net.Listen("tcp", listenAddr(p2))
+	if err != nil {
+		t.Fatalf("occupy p2: %v", err)
+	}
+	defer blocker.Close()
+
+	// Change BOTH port (to the occupied p2) and name; password also changes.
+	c.Apply(appConfig{pass: "pw2", name: "TV", port: p2})
+
+	// Must recover on the old port with the new password (password swap is
+	// independent of the listener).
+	if !waitFor(func() bool { return dialAuth(t, p1, "pw2") }) {
+		t.Error("must recover serving on old port p1 after rebind failure")
+	}
+	if !c.isRunning() {
+		t.Error("controller must remain running after a successful rollback")
+	}
+	// cfg must be rolled back so it stays consistent with the still-old mDNS
+	// announcement (old port AND old name).
+	if c.cfg.Port != p1 {
+		t.Errorf("cfg.Port after rollback = %d, want %d", c.cfg.Port, p1)
+	}
+	if c.cfg.Name != "PC" {
+		t.Errorf("cfg.Name after rollback = %q, want \"PC\"", c.cfg.Name)
 	}
 }
