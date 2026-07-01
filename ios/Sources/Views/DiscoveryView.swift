@@ -32,6 +32,11 @@ struct DiscoveryView: View {
                                 Image(systemName: "chevron.right").foregroundStyle(.secondary) }
                         }
                     }
+                    if !discovery.statusText.isEmpty {
+                        Text(discovery.statusText)
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                    }
                 } header: {
                     HStack {
                         Text("发现的电脑")
