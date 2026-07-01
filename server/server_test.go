@@ -70,3 +70,56 @@ func waitFor(cond func() bool) bool {
 	}
 	return cond()
 }
+
+// runHandshake performs hello→challenge→auth against s over an in-memory pipe
+// and reports whether the server accepted (auth_ok). It closes the client when
+// done.
+func runHandshake(t *testing.T, s *Server, password string) bool {
+	t.Helper()
+	cli, srvConn := net.Pipe()
+	go s.handle(srvConn)
+	defer cli.Close()
+	cli.SetDeadline(time.Now().Add(3 * time.Second))
+
+	enc := json.NewEncoder(cli)
+	sc := bufio.NewScanner(cli)
+
+	if err := enc.Encode(map[string]any{"t": "hello", "name": "P"}); err != nil {
+		t.Fatal(err)
+	}
+	if !sc.Scan() {
+		t.Fatal("no challenge")
+	}
+	var ch struct {
+		Salt  string `json:"salt"`
+		Nonce string `json:"nonce"`
+	}
+	json.Unmarshal(sc.Bytes(), &ch)
+	salt, _ := base64.StdEncoding.DecodeString(ch.Salt)
+	nonce, _ := base64.StdEncoding.DecodeString(ch.Nonce)
+	if err := enc.Encode(map[string]any{"t": "auth", "proof": deriveProof(password, salt, nonce)}); err != nil {
+		t.Fatal(err)
+	}
+	if !sc.Scan() {
+		t.Fatal("no reply")
+	}
+	var reply struct {
+		T string `json:"t"`
+	}
+	json.Unmarshal(sc.Bytes(), &reply)
+	return reply.T == "auth_ok"
+}
+
+func TestSetPasswordHotSwap(t *testing.T) {
+	s := &Server{password: "old", name: "srv", inj: newInjector(), reg: NewClientRegistry()}
+	if !runHandshake(t, s, "old") {
+		t.Fatal("old password should authenticate before swap")
+	}
+	s.SetPassword("new")
+	if runHandshake(t, s, "old") {
+		t.Error("old password must fail after swap")
+	}
+	if !runHandshake(t, s, "new") {
+		t.Error("new password must authenticate after swap")
+	}
+}

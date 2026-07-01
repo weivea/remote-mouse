@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/crypto/pbkdf2"
@@ -20,10 +21,38 @@ import (
 const iterations = 100000
 
 type Server struct {
+	mu       sync.RWMutex
 	password string
 	name     string
 	inj      Injector
 	reg      *ClientRegistry
+}
+
+// SetPassword hot-swaps the auth password; only new authentications are
+// affected, already-authenticated connections stay up.
+func (s *Server) SetPassword(p string) {
+	s.mu.Lock()
+	s.password = p
+	s.mu.Unlock()
+}
+
+// SetName hot-swaps the display name returned in auth_ok.
+func (s *Server) SetName(n string) {
+	s.mu.Lock()
+	s.name = n
+	s.mu.Unlock()
+}
+
+func (s *Server) curPassword() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.password
+}
+
+func (s *Server) curName() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.name
 }
 
 func deriveProof(password string, salt, nonce []byte) string {
@@ -60,13 +89,13 @@ func (s *Server) handle(c net.Conn) {
 	}
 	var auth In
 	json.Unmarshal(r.Bytes(), &auth)
-	want := deriveProof(s.password, salt, nonce)
+	want := deriveProof(s.curPassword(), salt, nonce)
 	if auth.T != "auth" || subtle.ConstantTimeCompare([]byte(auth.Proof), []byte(want)) != 1 {
 		s.send(c, map[string]any{"t": "error", "code": "auth_failed", "msg": "wrong password"})
 		log.Printf("auth failed from %s (%s)", addr, hello.Name)
 		return
 	}
-	s.send(c, map[string]any{"t": "auth_ok", "server": s.name, "ver": "0.1"})
+	s.send(c, map[string]any{"t": "auth_ok", "server": s.curName(), "ver": "0.1"})
 	log.Printf("client connected: %s (%s)", hello.Name, addr)
 
 	if s.reg != nil {
@@ -97,12 +126,10 @@ func (s *Server) send(c net.Conn, v any) {
 	c.Write(b)
 }
 
-func (s *Server) Listen(port int) error {
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return err
-	}
-	log.Printf("control listening on tcp/%d", port)
+// Serve accepts connections on ln, spawning a goroutine per connection. It runs
+// until ln is closed or Accept returns a non-nil error. The caller owns ln and
+// is responsible for closing it.
+func (s *Server) Serve(ln net.Listener) error {
 	for {
 		c, err := ln.Accept()
 		if err != nil {
@@ -110,6 +137,15 @@ func (s *Server) Listen(port int) error {
 		}
 		go s.handle(c)
 	}
+}
+
+func (s *Server) Listen(port int) error {
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return err
+	}
+	log.Printf("control listening on tcp/%d", port)
+	return s.Serve(ln)
 }
 
 func sanitizeName(n string) string { return strings.TrimSpace(n) }
