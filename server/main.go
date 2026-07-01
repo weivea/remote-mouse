@@ -32,6 +32,7 @@ type appConfig struct {
 	uninstallService bool
 	probeDesktop     bool
 	standalone       bool
+	injectLog        bool
 }
 
 // mode resolves the run mode from the flags. install/uninstall win over service
@@ -70,6 +71,7 @@ func main() {
 	flag.BoolVar(&cfg.uninstallService, "uninstall-service", false, "remove the Windows service (run as admin)")
 	flag.BoolVar(&cfg.probeDesktop, "probe-desktop", false, "print the current input desktop in a loop (dev)")
 	flag.BoolVar(&cfg.standalone, "standalone", false, "listen + inject in one process, Default desktop only (dev)")
+	flag.BoolVar(&cfg.injectLog, "injectlog", false, "agent: verbose per-event injection logging (diagnostic)")
 	flag.Parse()
 
 	run(cfg)

@@ -13,8 +13,15 @@ import (
 // terminates this process when the input desktop changes, so on pipe close the
 // agent simply exits.
 func runAgent(cfg appConfig) {
-	setupFileLogger("agent")
-	log.Printf("agent starting, pipe=%s", cfg.pipe)
+	// Split logs per desktop so the two lock-screen agents don't interleave:
+	// the Default/user agent (curtain) -> agent-user.log, the Winlogon/secure
+	// agent (PIN) -> agent-secure.log.
+	role := "agent-user"
+	if cfg.absolute {
+		role = "agent-secure"
+	}
+	setupFileLogger(role)
+	log.Printf("agent starting, pipe=%s absolute=%v", cfg.pipe, cfg.absolute)
 
 	var conn net.Conn
 	for i := 0; i < 20; i++ { // ~5s of startup retries while the listener comes up
@@ -36,6 +43,13 @@ func runAgent(cfg appConfig) {
 	inj := newInjector() // winInjector (real SendInput), relative mouse
 	if cfg.absolute {
 		inj = newSecureInjector() // absolute mouse for the secure desktop
+	}
+	// Per-event injection logging is opt-in: the service passes -injectlog when
+	// it was started with RM_INJECTLOG set, so production stays quiet while the
+	// two lock-screen desktops (curtain click on Default, PIN text on Winlogon)
+	// can still be traced on demand.
+	if cfg.injectLog {
+		setVerboseInject(true)
 	}
 	defer inj.Close()
 	runAgentLoop(conn, inj)

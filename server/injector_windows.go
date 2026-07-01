@@ -4,9 +4,11 @@ package main
 
 import (
 	"log"
+	"os"
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -71,17 +73,76 @@ type keybdInput struct {
 
 var sendInputWarned int32
 
+// verboseInject, when set, makes sendMany log the result of every injection
+// (event type, key vk / mouse flags, and the SendInput count/err). It is turned
+// on for the secure-desktop agent so we get ground truth about which events the
+// lock/logon desktop accepts vs. silently drops. Pure mouse-move spam is
+// rate-limited; keyboard, buttons, scrolls and any short-count are always logged.
+var (
+	verboseInject int32
+	lastMoveLogNs int64
+)
+
+func setVerboseInject(on bool) {
+	if on {
+		atomic.StoreInt32(&verboseInject, 1)
+	} else {
+		atomic.StoreInt32(&verboseInject, 0)
+	}
+}
+
+// RM_INJECTLOG=1 turns on per-event injection logging for any mode (used to
+// diagnose the standalone process's behavior on the lock screen); it also
+// redirects logging to %ProgramData%\RemoteMouse\standalone.log so the evidence
+// survives a lock. The secure-desktop agent enables verbose logging on its own.
+func init() {
+	if os.Getenv("RM_INJECTLOG") != "" {
+		setupFileLogger("standalone")
+		setVerboseInject(true)
+	}
+}
+
 func sendMany(ins []input) {
 	if len(ins) == 0 {
 		return
 	}
 	n, _, err := procSendInput.Call(uintptr(len(ins)), uintptr(unsafe.Pointer(&ins[0])), unsafe.Sizeof(ins[0]))
+	short := int(n) != len(ins)
+	if atomic.LoadInt32(&verboseInject) == 1 {
+		logInject(ins, int(n), err, short)
+	}
 	// SendInput returns the number of events actually inserted; a short count
 	// means the injection was blocked (e.g. wrong cbSize, or UIPI when the
 	// foreground window is elevated). Log once so it isn't a silent no-op.
-	if int(n) != len(ins) && atomic.CompareAndSwapInt32(&sendInputWarned, 0, 1) {
+	if short && atomic.CompareAndSwapInt32(&sendInputWarned, 0, 1) {
 		log.Printf("SendInput injected %d/%d events (input blocked): %v", int(n), len(ins), err)
 	}
+}
+
+// logInject emits one line per injection batch for lock-screen diagnostics. It
+// deliberately never logs typed CONTENT: a Unicode TEXT event carries the actual
+// character in wScan (this is the PIN-entry path on the secure desktop), so only
+// its shape (flags/count/result) is logged, never the code point.
+func logInject(ins []input, n int, err error, short bool) {
+	first := ins[0]
+	if first.typ == inputKeyboard {
+		k := *(*keybdInput)(unsafe.Pointer(&first.mi))
+		if k.flags&keyUnicode != 0 {
+			log.Printf("inject TEXT flags=0x%X count=%d -> n=%d err=%v", k.flags, len(ins), n, err)
+			return
+		}
+		log.Printf("inject KEY vk=0x%02X scan=0x%04X flags=0x%X count=%d -> n=%d err=%v", k.vk, k.scan, k.flags, len(ins), n, err)
+		return
+	}
+	isMove := len(ins) == 1 && first.mi.flags&moveRelF != 0
+	if isMove && !short {
+		now := time.Now().UnixNano()
+		if now-atomic.LoadInt64(&lastMoveLogNs) < int64(time.Second) {
+			return
+		}
+		atomic.StoreInt64(&lastMoveLogNs, now)
+	}
+	log.Printf("inject MOUSE dx=%d dy=%d flags=0x%X count=%d -> n=%d err=%v", first.mi.dx, first.mi.dy, first.mi.flags, len(ins), n, err)
 }
 
 func mouse(mi mouseInput) input { return input{typ: inputMouse, mi: mi} }

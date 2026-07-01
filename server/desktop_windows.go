@@ -38,7 +38,7 @@ const (
 // lock/login secure desktop, or "Screen-saver". It only works from an
 // interactive session (the -probe-desktop dev mode); a session-0 service is on
 // window station Service-0x0-3e7$ and cannot observe the interactive input
-// desktop this way, so the service uses consoleDesktop/sessionLockState instead.
+// desktop this way, so the service uses sessionLockState/desiredDesktops instead.
 func currentInputDesktop() (string, error) {
 	hd, _, err := procOpenInputDesktop.Call(0, 0, uintptr(windows.GENERIC_READ))
 	if hd == 0 {
@@ -94,15 +94,43 @@ func desktopForFlags(flags int32) string {
 	return "Default"
 }
 
-// consoleDesktop reports the desktop the service should bind an agent to for the
-// given console session, derived from its lock state. Returns the raw flags for
-// diagnostics.
-func consoleDesktop(sess uint32) (desk string, flags int32, err error) {
-	flags, err = sessionLockState(sess)
-	if err != nil {
-		return "", 0, err
+// desiredDesktops returns the set of desktops the service must run an agent on
+// for the given session lock flags. Unlocked: just Default. Locked: BOTH the
+// Default desktop (the LockApp "curtain" — wallpaper/clock — lives here and is
+// dismissed by a user-token mouse move+click) AND the Winlogon secure desktop
+// (the LogonUI credential/PIN box lives here and only accepts SYSTEM-token
+// Unicode text). Running both and broadcasting every event lets whichever
+// desktop is the active input desktop accept it while the other harmlessly
+// rejects with ACCESS_DENIED, so iOS can drive the whole unlock: move+click to
+// dismiss the curtain, then type the PIN. Order matters: Default first.
+func desiredDesktops(flags int32) []string {
+	primary := desktopForFlags(flags) // Winlogon when locked, else Default
+	if flags == wtsStateLock {
+		return []string{"Default", primary}
 	}
-	return desktopForFlags(flags), flags, nil
+	return []string{primary}
+}
+
+// planAgents diffs the currently-alive agent desktops against the desired set,
+// returning which to stop (alive but no longer wanted) and which to start
+// (wanted but not alive). start follows want's order so the Default/curtain
+// agent is spawned before the Winlogon/credential agent.
+func planAgents(alive map[string]bool, want []string) (stop, start []string) {
+	wantSet := make(map[string]bool, len(want))
+	for _, d := range want {
+		wantSet[d] = true
+	}
+	for d := range alive {
+		if !wantSet[d] {
+			stop = append(stop, d)
+		}
+	}
+	for _, d := range want {
+		if !alive[d] {
+			start = append(start, d)
+		}
+	}
+	return stop, start
 }
 
 type tokenStrategy int

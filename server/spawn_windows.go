@@ -114,7 +114,7 @@ func findProcessInSession(exe string, session uint32) (uint32, error) {
 // set (secure desktop) the agent is told to use absolute mouse positioning,
 // since the secure desktop ignores relative moves. It returns the process handle
 // so the caller can TerminateProcess it on the next desktop switch or shutdown.
-func spawnAgentOnDesktop(token windows.Token, exePath, desktop, pipe string, absolute bool) (windows.Handle, error) {
+func spawnAgentOnDesktop(token windows.Token, exePath, desktop, pipe string, absolute, injectLog bool) (windows.Handle, error) {
 	var env *uint16
 	if err := windows.CreateEnvironmentBlock(&env, token, false); err != nil {
 		return 0, fmt.Errorf("CreateEnvironmentBlock: %w", err)
@@ -125,6 +125,9 @@ func spawnAgentOnDesktop(token windows.Token, exePath, desktop, pipe string, abs
 	cmd := fmt.Sprintf(`"%s" -agent -pipe %s`, exePath, pipe)
 	if absolute {
 		cmd += " -absolute"
+	}
+	if injectLog {
+		cmd += " -injectlog"
 	}
 
 	var si windows.StartupInfo

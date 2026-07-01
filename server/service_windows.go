@@ -119,14 +119,22 @@ func runServiceCore(cfg appConfig, stop <-chan struct{}) {
 		defer zc.Shutdown()
 	}
 
-	mon := &agentMonitor{exe: selfPath(), pipe: cfg.pipe, ln: ln, pi: pi}
+	mon := &agentMonitor{exe: selfPath(), pipe: cfg.pipe, ln: ln, pi: pi, injectLog: os.Getenv("RM_INJECTLOG") != ""}
 	mon.run(stop)
 }
 
-// agentMonitor keeps exactly one agent running, bound to the current input
-// desktop. On any (session, desktop) change it terminates the old agent and
-// spawns a fresh one, then rebinds the pipeInjector's writer to the new pipe
-// connection.
+// agentMonitor keeps the right set of agents running for the current console
+// session's lock state and broadcasts injected events to all of them. Unlocked:
+// one agent on the Default desktop. Locked: two agents — Default (user token,
+// dismisses the lock curtain) and Winlogon (SYSTEM token, types the PIN on the
+// secure desktop). On each tick it reconciles the running set against the
+// desired set, spawning/killing agents and rebinding the pipeInjector to a
+// fan-out over every live agent connection.
+type agentProc struct {
+	h    windows.Handle
+	conn net.Conn
+}
+
 type agentMonitor struct {
 	exe  string
 	pipe string
@@ -135,10 +143,9 @@ type agentMonitor struct {
 
 	mu      sync.Mutex
 	curSess uint32
-	curDesk string
-	agentH  windows.Handle
-	conn    net.Conn
+	agents  map[string]*agentProc // keyed by desktop name
 
+	injectLog  bool      // pass -injectlog to spawned agents (RM_INJECTLOG at start)
 	lastErrLog time.Time // monitor goroutine only; rate-limits detect-error logs
 }
 
@@ -148,7 +155,7 @@ func (m *agentMonitor) run(stop <-chan struct{}) {
 	for {
 		select {
 		case <-stop:
-			m.killAgent()
+			m.killAll()
 			return
 		case <-tick.C:
 			m.reconcile()
@@ -158,7 +165,7 @@ func (m *agentMonitor) run(stop <-chan struct{}) {
 
 func (m *agentMonitor) reconcile() {
 	sess := activeConsoleSession()
-	desk, flags, err := consoleDesktop(sess)
+	flags, err := sessionLockState(sess)
 	if err != nil {
 		if time.Since(m.lastErrLog) > 5*time.Second {
 			log.Printf("desktop detect (session=%d): %v", sess, err)
@@ -166,19 +173,51 @@ func (m *agentMonitor) reconcile() {
 		}
 		return // retry next tick
 	}
+	want := desiredDesktops(flags)
+
 	m.mu.Lock()
-	same := sess == m.curSess && desk == m.curDesk
+	sessChanged := sess != m.curSess
 	m.mu.Unlock()
-	if same && m.agentAlive() {
-		return
+	if sessChanged {
+		m.killAll()
+		m.mu.Lock()
+		m.curSess = sess
+		m.mu.Unlock()
 	}
-	log.Printf("desktop change -> session=%d desktop=%q flags=%d (was %d/%q)", sess, desk, flags, m.curSess, m.curDesk)
-	m.respawn(sess, desk)
+
+	// Build the alive set, reaping any agent whose process has exited so it is
+	// treated as missing and respawned below.
+	m.mu.Lock()
+	alive := make(map[string]bool, len(m.agents))
+	var dead []string
+	for desk, ap := range m.agents {
+		if procAlive(ap.h) {
+			alive[desk] = true
+		} else {
+			dead = append(dead, desk)
+		}
+	}
+	m.mu.Unlock()
+	for _, desk := range dead {
+		m.stopAgent(desk)
+	}
+
+	stop, start := planAgents(alive, want)
+	changed := sessChanged || len(dead) > 0 || len(stop) > 0 || len(start) > 0
+	for _, desk := range stop {
+		log.Printf("agent no longer wanted -> stopping %q (session=%d flags=%d)", desk, sess, flags)
+		m.stopAgent(desk)
+	}
+	for _, desk := range start {
+		log.Printf("agent wanted -> starting %q (session=%d flags=%d)", desk, sess, flags)
+		m.spawnOne(sess, desk)
+	}
+	if changed {
+		m.rebindWriters()
+	}
 }
 
-func (m *agentMonitor) respawn(sess uint32, desk string) {
-	m.killAgent()
-
+func (m *agentMonitor) spawnOne(sess uint32, desk string) {
 	var (
 		tok windows.Token
 		err error
@@ -196,7 +235,7 @@ func (m *agentMonitor) respawn(sess uint32, desk string) {
 	}
 	defer tok.Close()
 
-	h, err := spawnAgentOnDesktop(tok, m.exe, desk, m.pipe, strat != tokenUser)
+	h, err := spawnAgentOnDesktop(tok, m.exe, desk, m.pipe, strat != tokenUser, m.injectLog)
 	if err != nil {
 		log.Printf("spawn agent on %q: %v", desk, err)
 		return
@@ -211,10 +250,11 @@ func (m *agentMonitor) respawn(sess uint32, desk string) {
 	}
 
 	m.mu.Lock()
-	m.agentH, m.conn = h, conn
-	m.curSess, m.curDesk = sess, desk
+	if m.agents == nil {
+		m.agents = make(map[string]*agentProc)
+	}
+	m.agents[desk] = &agentProc{h: h, conn: conn}
 	m.mu.Unlock()
-	m.pi.setWriter(conn)
 	log.Printf("agent bound to session=%d desktop=%q", sess, desk)
 }
 
@@ -239,10 +279,7 @@ func (m *agentMonitor) acceptWithTimeout(d time.Duration) (net.Conn, error) {
 	}
 }
 
-func (m *agentMonitor) agentAlive() bool {
-	m.mu.Lock()
-	h := m.agentH
-	m.mu.Unlock()
+func procAlive(h windows.Handle) bool {
 	if h == 0 {
 		return false
 	}
@@ -250,26 +287,65 @@ func (m *agentMonitor) agentAlive() bool {
 	return err == nil && ev == uint32(windows.WAIT_TIMEOUT)
 }
 
-func (m *agentMonitor) killAgent() {
+// stopAgent terminates the agent on desk and removes it from the set. It closes
+// the conn BEFORE the caller rebinds writers: pipeInjector.emit holds pi.mu
+// across the fan-out Write, so a hung-but-live agent could block that Write
+// while pi.mu is held; closing the conn unblocks the stuck Write so the
+// subsequent rebindWriters (which takes pi.mu) cannot wedge the monitor.
+func (m *agentMonitor) stopAgent(desk string) {
 	m.mu.Lock()
-	h, conn := m.agentH, m.conn
-	m.agentH, m.conn = 0, nil
+	ap := m.agents[desk]
+	delete(m.agents, desk)
 	m.mu.Unlock()
-
-	// Close the conn and terminate the agent BEFORE detaching the writer.
-	// pipeInjector.emit holds pi.mu across its pipe Write, so a hung-but-live
-	// agent could block that Write while holding pi.mu; calling setWriter(nil)
-	// first would then block on the same mutex and wedge the monitor goroutine.
-	// Closing conn unblocks the stuck Write, releasing pi.mu so setWriter(nil)
-	// can proceed (a concurrent emit to the closed conn just returns an error).
-	if conn != nil {
-		conn.Close()
+	if ap == nil {
+		return
 	}
-	if h != 0 {
-		windows.TerminateProcess(h, 0)
-		windows.CloseHandle(h)
+	if ap.conn != nil {
+		ap.conn.Close()
+	}
+	if ap.h != 0 {
+		windows.TerminateProcess(ap.h, 0)
+		windows.CloseHandle(ap.h)
+	}
+}
+
+// killAll terminates every agent and detaches the injector writer. Conns are
+// closed before setWriter(nil) for the same deadlock-avoidance reason as
+// stopAgent.
+func (m *agentMonitor) killAll() {
+	m.mu.Lock()
+	agents := m.agents
+	m.agents = nil
+	m.mu.Unlock()
+	for _, ap := range agents {
+		if ap.conn != nil {
+			ap.conn.Close()
+		}
+		if ap.h != 0 {
+			windows.TerminateProcess(ap.h, 0)
+			windows.CloseHandle(ap.h)
+		}
 	}
 	m.pi.setWriter(nil)
+}
+
+// rebindWriters points the pipeInjector at a fan-out over every live agent
+// connection, so each injected event is broadcast to all agents; only the agent
+// on the active input desktop actually injects, the rest no-op with ACCESS_DENIED.
+func (m *agentMonitor) rebindWriters() {
+	m.mu.Lock()
+	ws := make([]deadlineWriter, 0, len(m.agents))
+	for _, ap := range m.agents {
+		if ap.conn != nil {
+			ws = append(ws, ap.conn)
+		}
+	}
+	m.mu.Unlock()
+	if len(ws) == 0 {
+		m.pi.setWriter(nil)
+		return
+	}
+	m.pi.setWriter(&fanoutWriter{ws: ws, timeout: 2 * time.Second})
 }
 
 func installService(cfg appConfig) error {
