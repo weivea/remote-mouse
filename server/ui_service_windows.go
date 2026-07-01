@@ -10,17 +10,23 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
-// serveUI is the default (no-flag) mode: a tray UI that shows connection info
-// from HKLM and installs/controls the service. It does NOT listen on TCP or
-// inject — the service owns that. The device list is empty here (the service
-// owns the real connections); a status pipe to populate it is a POC follow-up.
+// serveUI is the default (no-flag) mode. When the RemoteMouse service is
+// installed and running it owns the TCP port and mDNS, so this acts as a
+// controller UI only (status from HKLM), avoiding a fight for port 27500.
+// Otherwise it serves directly — announce + listen + inject on the unlocked
+// desktop — restoring the simple single-process mode so the phone can discover
+// it without installing the service.
 func serveUI(cfg appConfig) {
-	if sc, err := readConfig(registry.LOCAL_MACHINE); err == nil {
-		cfg.pass, cfg.port = sc.Password, sc.Port
+	if serviceRunning() {
+		if sc, err := readConfig(registry.LOCAL_MACHINE); err == nil {
+			cfg.pass, cfg.port = sc.Password, sc.Port
+		}
+		ips := DetectIPs()
+		reg := NewClientRegistry()
+		runUI(cfg.notray, cfg.pass, cfg.port, ips, reg)
+		return
 	}
-	ips := DetectIPs()
-	reg := NewClientRegistry()
-	runUI(cfg.notray, cfg.pass, cfg.port, ips, reg)
+	serveStandalone(cfg)
 }
 
 // elevatedSelf relaunches this executable elevated (UAC) with args, used for
@@ -32,6 +38,28 @@ func elevatedSelf(args ...string) {
 	if err := windows.ShellExecute(0, verb, file, argp, nil, windows.SW_NORMAL); err != nil {
 		log.Printf("elevatedSelf %v: %v", args, err)
 	}
+}
+
+// serviceRunning reports whether the RemoteMouse service is installed and in the
+// RUNNING state, using read-only SCM access (no admin required). Used by the
+// default mode to decide whether to serve directly or act as a controller.
+func serviceRunning() bool {
+	scm, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
+	if err != nil {
+		return false
+	}
+	defer windows.CloseServiceHandle(scm)
+	name, _ := windows.UTF16PtrFromString(svcName)
+	sh, err := windows.OpenService(scm, name, windows.SERVICE_QUERY_STATUS)
+	if err != nil {
+		return false
+	}
+	defer windows.CloseServiceHandle(sh)
+	var st windows.SERVICE_STATUS
+	if err := windows.QueryServiceStatus(sh, &st); err != nil {
+		return false
+	}
+	return st.CurrentState == windows.SERVICE_RUNNING
 }
 
 // serviceState returns a human-readable service status using read-only SCM

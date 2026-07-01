@@ -61,3 +61,24 @@ func TestPickIPsEmpty(t *testing.T) {
 		t.Errorf("want empty HostIPs, got %+v", got)
 	}
 }
+
+func TestKeepAnnounceIface(t *testing.T) {
+	cases := []struct {
+		f    ifaceAddrs
+		want bool
+	}{
+		{ifaceAddrs{Name: "Ethernet", Up: true, Addrs: ips("10.32.86.111")}, true},
+		{ifaceAddrs{Name: "Wi-Fi", Up: true, Addrs: ips("192.168.137.121")}, true},
+		{ifaceAddrs{Name: "vEthernet (Default Switch)", Up: true, Addrs: ips("172.17.48.1")}, false}, // virtual
+		{ifaceAddrs{Name: "Ethernet", Up: false, Addrs: ips("10.0.0.5")}, false},                     // down
+		{ifaceAddrs{Name: "lo", Up: true, Loop: true, Addrs: ips("127.0.0.1")}, false},               // loopback
+		{ifaceAddrs{Name: "Wi-Fi", Up: true, Addrs: ips("169.254.1.2")}, false},                      // APIPA only
+		{ifaceAddrs{Name: "Ethernet", Up: true, Addrs: nil}, false},                                  // no IPv4
+	}
+	for _, c := range cases {
+		if got := keepAnnounceIface(c.f); got != c.want {
+			t.Errorf("keepAnnounceIface(%q up=%v loop=%v addrs=%v) = %v, want %v",
+				c.f.Name, c.f.Up, c.f.Loop, c.f.Addrs, got, c.want)
+		}
+	}
+}
