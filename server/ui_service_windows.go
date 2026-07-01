@@ -5,9 +5,11 @@ package main
 import (
 	"log"
 	"strings"
+	"syscall"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
+	"golang.org/x/sys/windows/svc/mgr"
 )
 
 // serveUI is the default (no-flag) mode. When the RemoteMouse service is
@@ -29,12 +31,24 @@ func serveUI(cfg appConfig) {
 	serveStandalone(cfg)
 }
 
+// elevatedArgLine builds a Windows command line from args, quoting/escaping each
+// one so values containing spaces (e.g. a device name or password) survive the
+// child process's flag parsing. syscall.EscapeArg applies the CommandLineToArgvW
+// quoting rules and leaves space-free tokens untouched.
+func elevatedArgLine(args []string) string {
+	parts := make([]string, len(args))
+	for i, a := range args {
+		parts[i] = syscall.EscapeArg(a)
+	}
+	return strings.Join(parts, " ")
+}
+
 // elevatedSelf relaunches this executable elevated (UAC) with args, used for
 // install/uninstall which require admin.
 func elevatedSelf(args ...string) {
 	verb, _ := windows.UTF16PtrFromString("runas")
 	file, _ := windows.UTF16PtrFromString(selfPath())
-	argp, _ := windows.UTF16PtrFromString(strings.Join(args, " "))
+	argp, _ := windows.UTF16PtrFromString(elevatedArgLine(args))
 	if err := windows.ShellExecute(0, verb, file, argp, nil, windows.SW_NORMAL); err != nil {
 		log.Printf("elevatedSelf %v: %v", args, err)
 	}
@@ -92,4 +106,34 @@ func serviceState() string {
 	default:
 		return "未知"
 	}
+}
+
+// serviceStartType returns the service start type using read-only SCM access
+// (no admin). ok is false when the service is not installed or unreadable. It
+// wraps a self-opened handle in mgr.Service to reuse mgr's config parsing while
+// avoiding mgr.Connect (which demands admin).
+func serviceStartType() (uint32, bool) {
+	scm, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
+	if err != nil {
+		return 0, false
+	}
+	defer windows.CloseServiceHandle(scm)
+	name, _ := windows.UTF16PtrFromString(svcName)
+	h, err := windows.OpenService(scm, name, windows.SERVICE_QUERY_CONFIG)
+	if err != nil {
+		return 0, false // not installed
+	}
+	defer windows.CloseServiceHandle(h)
+	s := &mgr.Service{Name: svcName, Handle: h}
+	cfg, err := s.Config()
+	if err != nil {
+		return 0, false
+	}
+	return cfg.StartType, true
+}
+
+// serviceInstalled reports whether the service exists (read-only).
+func serviceInstalled() bool {
+	_, ok := serviceStartType()
+	return ok
 }

@@ -398,3 +398,99 @@ func uninstallService() error {
 	fmt.Printf("removed service %q\n", svcName)
 	return nil
 }
+
+// startService starts the installed service (admin).
+func startService() error {
+	m, err := mgr.Connect()
+	if err != nil {
+		return fmt.Errorf("connect SCM (run as admin): %w", err)
+	}
+	defer m.Disconnect()
+	s, err := m.OpenService(svcName)
+	if err != nil {
+		return fmt.Errorf("service %s not installed: %w", svcName, err)
+	}
+	defer s.Close()
+	if err := s.Start(); err != nil {
+		return fmt.Errorf("start service: %w", err)
+	}
+	fmt.Printf("started service %q\n", svcName)
+	return nil
+}
+
+// stopService sends a stop control to the service and polls up to 10s for it to
+// reach Stopped (admin).
+func stopService() error {
+	m, err := mgr.Connect()
+	if err != nil {
+		return fmt.Errorf("connect SCM (run as admin): %w", err)
+	}
+	defer m.Disconnect()
+	s, err := m.OpenService(svcName)
+	if err != nil {
+		return fmt.Errorf("service %s not installed: %w", svcName, err)
+	}
+	defer s.Close()
+	st, err := s.Control(svc.Stop)
+	if err != nil {
+		return fmt.Errorf("stop service: %w", err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for st.State != svc.Stopped && time.Now().Before(deadline) {
+		time.Sleep(300 * time.Millisecond)
+		if st, err = s.Query(); err != nil {
+			return fmt.Errorf("query on stop: %w", err)
+		}
+	}
+	if st.State != svc.Stopped {
+		return fmt.Errorf("stop timed out after 10s: service still in state %d", st.State)
+	}
+	fmt.Printf("stopped service %q\n", svcName)
+	return nil
+}
+
+// restartService stops then starts the service (admin). A stop error is logged
+// but not fatal; startService is always attempted.
+func restartService() error {
+	if err := stopService(); err != nil {
+		log.Printf("restart: stop failed (continuing): %v", err)
+	}
+	return startService()
+}
+
+// setStartType changes the service start type (admin).
+func setStartType(t uint32) error {
+	m, err := mgr.Connect()
+	if err != nil {
+		return fmt.Errorf("connect SCM (run as admin): %w", err)
+	}
+	defer m.Disconnect()
+	s, err := m.OpenService(svcName)
+	if err != nil {
+		return fmt.Errorf("service %s not installed: %w", svcName, err)
+	}
+	defer s.Close()
+	cfg, err := s.Config()
+	if err != nil {
+		return fmt.Errorf("read service config: %w", err)
+	}
+	cfg.StartType = t
+	if err := s.UpdateConfig(cfg); err != nil {
+		return fmt.Errorf("update start type: %w", err)
+	}
+	fmt.Printf("set start type of %q to %s\n", svcName, startTypeArg(t))
+	return nil
+}
+
+// applyConfigElevated persists connection config to HKLM and, if the service is
+// running, restarts it so the change takes effect (admin, one UAC).
+func applyConfigElevated(cfg appConfig) error {
+	if err := writeConfig(registry.LOCAL_MACHINE, serverConfig{Password: cfg.pass, Port: cfg.port, Name: cfg.name}); err != nil {
+		return fmt.Errorf("write HKLM config: %w", err)
+	}
+	if serviceRunning() {
+		return restartService()
+	}
+	fmt.Printf("config saved (service not running; will apply on next start)\n")
+	return nil
+}
