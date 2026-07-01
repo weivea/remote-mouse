@@ -26,6 +26,7 @@ type appConfig struct {
 
 	service          bool
 	agent            bool
+	absolute         bool
 	pipe             string
 	installService   bool
 	uninstallService bool
@@ -63,6 +64,7 @@ func main() {
 	flag.BoolVar(&cfg.notray, "notray", false, "console mode, no tray icon")
 	flag.BoolVar(&cfg.service, "service", false, "run as the Windows service (LocalSystem)")
 	flag.BoolVar(&cfg.agent, "agent", false, "run as the injection agent on the input desktop")
+	flag.BoolVar(&cfg.absolute, "absolute", false, "agent: use absolute mouse positioning (required on the secure desktop)")
 	flag.StringVar(&cfg.pipe, "pipe", `\\.\pipe\remotemouse-inject`, "named pipe for service<->agent IPC")
 	flag.BoolVar(&cfg.installService, "install-service", false, "install the Windows service (run as admin)")
 	flag.BoolVar(&cfg.uninstallService, "uninstall-service", false, "remove the Windows service (run as admin)")

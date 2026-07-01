@@ -33,7 +33,10 @@ func runAgent(cfg appConfig) {
 	defer conn.Close()
 	log.Printf("agent connected; injecting on this desktop")
 
-	inj := newInjector() // winInjector (real SendInput)
+	inj := newInjector() // winInjector (real SendInput), relative mouse
+	if cfg.absolute {
+		inj = newSecureInjector() // absolute mouse for the secure desktop
+	}
 	defer inj.Close()
 	runAgentLoop(conn, inj)
 	log.Printf("agent pipe closed; exiting")

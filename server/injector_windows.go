@@ -4,14 +4,17 @@ package main
 
 import (
 	"log"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"unsafe"
 )
 
 var (
-	user32        = syscall.NewLazyDLL("user32.dll")
-	procSendInput = user32.NewProc("SendInput")
+	user32               = syscall.NewLazyDLL("user32.dll")
+	procSendInput        = user32.NewProc("SendInput")
+	procGetSystemMetrics = user32.NewProc("GetSystemMetrics")
+	procGetCursorPos     = user32.NewProc("GetCursorPos")
 )
 
 const (
@@ -27,11 +30,20 @@ const (
 	midUp       = 0x0040
 	wheel       = 0x0800
 	hwheel      = 0x1000
+	absoluteF   = 0x8000 // MOUSEEVENTF_ABSOLUTE
+	virtualDesk = 0x4000 // MOUSEEVENTF_VIRTUALDESK
 	keyUnicode  = 0x0004
 	keyUp       = 0x0002
 	keyExtended = 0x0001
 
 	wheelDelta = 120
+
+	smCXScreen        = 0
+	smCYScreen        = 1
+	smXVirtualScreen  = 76
+	smYVirtualScreen  = 77
+	smCXVirtualScreen = 78
+	smCYVirtualScreen = 79
 )
 
 // input matches Win32 INPUT exactly (x64: 40 bytes). The mi field doubles as
@@ -87,26 +99,144 @@ func keyVK(vk uint16, up bool) input {
 	return in
 }
 
-type winInjector struct{}
+// winInjector injects via SendInput. In relative mode (the default, used on the
+// ordinary Default desktop) it forwards raw MOUSEEVENTF_MOVE deltas so the OS
+// pointer-acceleration curve applies. In absolute mode it tracks a virtual
+// cursor position and emits MOUSEEVENTF_ABSOLUTE moves: the Windows secure
+// desktop (lock / logon / UAC) silently ignores relative mouse moves, so
+// absolute positioning is the only way to drive the pointer there. Keyboard
+// SendInput is accepted on the secure desktop regardless, which is why text
+// injection works on the lock screen but relative mouse moves do not.
+type winInjector struct {
+	absolute bool
 
-func newInjector() Injector { return &winInjector{} }
-
-func (winInjector) MoveRel(dx, dy int) {
-	sendMany([]input{mouse(mouseInput{dx: int32(dx), dy: int32(dy), flags: moveRelF})})
+	mu     sync.Mutex
+	seeded bool
+	x, y   int32 // tracked pointer position in virtual-desktop pixels
 }
-func (winInjector) Button(btn string, down bool) {
-	var f uint32
+
+func newInjector() Injector       { return &winInjector{} }
+func newSecureInjector() Injector { return &winInjector{absolute: true} }
+
+func (w *winInjector) MoveRel(dx, dy int) {
+	if !w.absolute {
+		sendMany([]input{mouse(mouseInput{dx: int32(dx), dy: int32(dy), flags: moveRelF})})
+		return
+	}
+	sendMany([]input{w.absMove(dx, dy)})
+}
+func (w *winInjector) Button(btn string, down bool) {
+	f := buttonFlag(btn, down)
+	if !w.absolute {
+		sendMany([]input{mouse(mouseInput{flags: f})})
+		return
+	}
+	// Re-assert the tracked absolute position so the click lands where the user
+	// last moved to; the secure desktop discards our relative moves otherwise.
+	sendMany([]input{w.absMove(0, 0), mouse(mouseInput{flags: f})})
+}
+
+// absMove accumulates a relative delta into the tracked pointer position and
+// returns an absolute MOUSEEVENTF_ABSOLUTE|VIRTUALDESK move for it. The position
+// is seeded from the live cursor on first use so control begins where the
+// pointer already is.
+func (w *winInjector) absMove(dx, dy int) input {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	ox, oy, cw, ch := virtualScreen()
+	if !w.seeded {
+		if px, py, ok := cursorPos(); ok {
+			w.x, w.y = px, py
+		} else {
+			w.x, w.y = ox+cw/2, oy+ch/2
+		}
+		w.seeded = true
+	}
+	w.x = clampI32(w.x+int32(dx), ox, ox+cw-1)
+	w.y = clampI32(w.y+int32(dy), oy, oy+ch-1)
+	nx, ny := normAbs(w.x, w.y, ox, oy, cw, ch)
+	return mouse(mouseInput{dx: nx, dy: ny, flags: moveRelF | absoluteF | virtualDesk})
+}
+
+func buttonFlag(btn string, down bool) uint32 {
 	switch btn {
 	case "right":
-		f = map[bool]uint32{true: rightDown, false: rightUp}[down]
+		if down {
+			return rightDown
+		}
+		return rightUp
 	case "middle":
-		f = map[bool]uint32{true: midDown, false: midUp}[down]
+		if down {
+			return midDown
+		}
+		return midUp
 	default:
-		f = map[bool]uint32{true: leftDown, false: leftUp}[down]
+		if down {
+			return leftDown
+		}
+		return leftUp
 	}
-	sendMany([]input{mouse(mouseInput{flags: f})})
 }
-func (winInjector) Scroll(dx, dy int) {
+
+// normAbs maps a virtual-desktop pixel position to SendInput's 0..65535 absolute
+// coordinate space, relative to the virtual-screen origin (ox,oy) and size
+// (cw,ch). Used with MOUSEEVENTF_VIRTUALDESK so it spans all monitors.
+func normAbs(x, y, ox, oy, cw, ch int32) (int32, int32) {
+	nx := int32(int64(clampI32(x, ox, ox+cw-1)-ox) * 65535 / int64(maxI32(cw-1, 1)))
+	ny := int32(int64(clampI32(y, oy, oy+ch-1)-oy) * 65535 / int64(maxI32(ch-1, 1)))
+	return nx, ny
+}
+
+func clampI32(v, lo, hi int32) int32 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+func maxI32(a, b int32) int32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// virtualScreen returns the bounding box of all monitors in pixels, falling back
+// to the primary monitor if the virtual-screen metrics are unavailable.
+func virtualScreen() (x, y, w, h int32) {
+	x = sysMetric(smXVirtualScreen)
+	y = sysMetric(smYVirtualScreen)
+	w = sysMetric(smCXVirtualScreen)
+	h = sysMetric(smCYVirtualScreen)
+	if w <= 0 {
+		w = sysMetric(smCXScreen)
+	}
+	if h <= 0 {
+		h = sysMetric(smCYScreen)
+	}
+	if w <= 0 {
+		w = 1
+	}
+	if h <= 0 {
+		h = 1
+	}
+	return
+}
+
+func sysMetric(i int) int32 {
+	r, _, _ := procGetSystemMetrics.Call(uintptr(i))
+	return int32(r)
+}
+
+func cursorPos() (x, y int32, ok bool) {
+	var p struct{ x, y int32 }
+	r, _, _ := procGetCursorPos.Call(uintptr(unsafe.Pointer(&p)))
+	return p.x, p.y, r != 0
+}
+func (w *winInjector) Scroll(dx, dy int) {
 	var ins []input
 	if dy != 0 {
 		ins = append(ins, mouse(mouseInput{mouseData: uint32(int32(dy) * wheelDelta), flags: wheel}))
@@ -116,7 +246,7 @@ func (winInjector) Scroll(dx, dy int) {
 	}
 	sendMany(ins)
 }
-func (winInjector) Text(s string) {
+func (w *winInjector) Text(s string) {
 	var ins []input
 	for _, r := range s {
 		for _, u := range utf16Units(r) {
@@ -134,7 +264,7 @@ func (winInjector) Text(s string) {
 
 // Key presses/releases a non-text key with modifiers. On down we press mods
 // then the key; on up we release the key then mods (reverse), so chords work.
-func (winInjector) Key(code, mods int, down bool) {
+func (w *winInjector) Key(code, mods int, down bool) {
 	vk := vkFor(code)
 	if vk == 0 {
 		return
@@ -149,7 +279,7 @@ func (winInjector) Key(code, mods int, down bool) {
 	}
 	sendMany(ins)
 }
-func (winInjector) Close() {}
+func (w *winInjector) Close() {}
 
 func modKeys(mods int, up bool) []input {
 	var ins []input

@@ -183,7 +183,8 @@ func (m *agentMonitor) respawn(sess uint32, desk string) {
 		tok windows.Token
 		err error
 	)
-	switch tokenStrategyFor(desk) {
+	strat := tokenStrategyFor(desk)
+	switch strat {
 	case tokenUser:
 		tok, err = userTokenForSession(sess)
 	default:
@@ -195,7 +196,7 @@ func (m *agentMonitor) respawn(sess uint32, desk string) {
 	}
 	defer tok.Close()
 
-	h, err := spawnAgentOnDesktop(tok, m.exe, desk, m.pipe)
+	h, err := spawnAgentOnDesktop(tok, m.exe, desk, m.pipe, strat != tokenUser)
 	if err != nil {
 		log.Printf("spawn agent on %q: %v", desk, err)
 		return
