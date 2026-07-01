@@ -111,8 +111,14 @@ func runServiceCore(cfg appConfig, stop <-chan struct{}) {
 	srv := &Server{password: cfg.pass, name: cfg.name, inj: pi, reg: reg}
 	go serveStatusPipe(statusPipe, reg, stop)
 	go func() {
-		if err := srv.Listen(cfg.port); err != nil {
-			log.Printf("tcp listen: %v", err)
+		ln, err := listenTCPRetry(cfg.port, 5*time.Second)
+		if err != nil {
+			log.Printf("tcp listen tcp/%d: %v", cfg.port, err)
+			return
+		}
+		log.Printf("control listening on tcp/%d", cfg.port)
+		if err := srv.Serve(ln); err != nil {
+			log.Printf("tcp serve: %v", err)
 		}
 	}()
 
@@ -350,6 +356,26 @@ func (m *agentMonitor) rebindWriters() {
 		return
 	}
 	m.pi.setWriter(&fanoutWriter{ws: ws, timeout: 2 * time.Second})
+}
+
+// listenTCPRetry binds :port, retrying briefly if the address is momentarily in
+// use. As the service starts, the UI's ServingArbiter can still hold the port
+// for up to one arbiter tick (~1s) before it releases; retrying for a few
+// seconds closes that handoff window instead of silently giving up and leaving
+// nobody serving.
+func listenTCPRetry(port int, within time.Duration) (net.Listener, error) {
+	addr := fmt.Sprintf(":%d", port)
+	deadline := time.Now().Add(within)
+	for {
+		ln, err := net.Listen("tcp", addr)
+		if err == nil {
+			return ln, nil
+		}
+		if time.Now().After(deadline) {
+			return nil, err
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 func installService(cfg appConfig) error {
