@@ -106,6 +106,7 @@ func runServiceCore(cfg appConfig, stop <-chan struct{}) {
 	pi := newPipeInjector(nil)
 	reg := NewClientRegistry()
 	srv := &Server{password: cfg.pass, name: cfg.name, inj: pi, reg: reg}
+	go serveStatusPipe(statusPipe, reg, stop)
 	go func() {
 		if err := srv.Listen(cfg.port); err != nil {
 			log.Printf("tcp listen: %v", err)
