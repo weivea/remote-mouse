@@ -92,7 +92,10 @@ func runServiceCore(cfg appConfig, stop <-chan struct{}) {
 
 	if sc, err := readConfig(registry.LOCAL_MACHINE); err == nil {
 		cfg.pass, cfg.port = sc.Password, sc.Port
-		log.Printf("config: port=%d (password loaded from HKLM)", sc.Port)
+		if sc.Name != "" {
+			cfg.name = sc.Name
+		}
+		log.Printf("config: port=%d name=%q (password loaded from HKLM)", sc.Port, cfg.name)
 	} else {
 		log.Printf("readConfig HKLM failed, using flags/defaults: %v", err)
 	}
@@ -351,7 +354,7 @@ func (m *agentMonitor) rebindWriters() {
 
 func installService(cfg appConfig) error {
 	exepath := selfPath()
-	if err := writeConfig(registry.LOCAL_MACHINE, serverConfig{Password: cfg.pass, Port: cfg.port}); err != nil {
+	if err := writeConfig(registry.LOCAL_MACHINE, serverConfig{Password: cfg.pass, Port: cfg.port, Name: cfg.name}); err != nil {
 		return fmt.Errorf("write HKLM config: %w", err)
 	}
 	m, err := mgr.Connect()

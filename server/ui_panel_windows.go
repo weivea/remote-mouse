@@ -171,7 +171,7 @@ func runControlPanel(cfg appConfig, ctrl *servingController, reg *ClientRegistry
 		if !ok {
 			return
 		}
-		elevatedSelf("-install-service", "-pass", pass, "-port", strconv.Itoa(port))
+		elevatedSelf("-install-service", "-pass", pass, "-port", strconv.Itoa(port), "-name", strings.TrimSpace(nameEdit.Text()))
 	})
 	btnStart.Clicked().Attach(func() { elevatedSelf("-start-service") })
 	btnStop.Clicked().Attach(func() { elevatedSelf("-stop-service") })
