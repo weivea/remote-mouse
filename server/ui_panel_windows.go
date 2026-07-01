@@ -160,7 +160,7 @@ func runControlPanel(cfg appConfig, ctrl *servingController, reg *ClientRegistry
 		} else {
 			ctrl.Apply(next)
 			if autostartOn() {
-				setAutostart(true, pass, port) // rewrite Run command with new values
+				setAutostartNamed(true, pass, port, next.name) // rewrite Run command with new values
 			}
 		}
 	})
@@ -220,7 +220,7 @@ func runControlPanel(cfg appConfig, ctrl *servingController, reg *ClientRegistry
 				if !ok {
 					return
 				}
-				setAutostart(true, pass, port)
+				setAutostartNamed(true, pass, port, strings.TrimSpace(nameEdit.Text()))
 			} else {
 				setAutostart(false, "", 0)
 			}

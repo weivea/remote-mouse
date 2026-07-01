@@ -5,6 +5,7 @@ package main
 import (
 	"os"
 	"strconv"
+	"strings"
 
 	"golang.org/x/sys/windows/registry"
 )
@@ -12,9 +13,13 @@ import (
 const runKey = `Software\Microsoft\Windows\CurrentVersion\Run`
 const runVal = "RemoteMouse"
 
-func autostartCmd(pass string, port int) string {
+func autostartCmd(pass string, port int, name string) string {
 	exe, _ := os.Executable()
-	return `"` + exe + `" -pass ` + pass + " -port " + strconv.Itoa(port)
+	cmd := `"` + exe + `" -pass ` + pass + " -port " + strconv.Itoa(port)
+	if strings.TrimSpace(name) != "" {
+		cmd += ` -name "` + name + `"`
+	}
+	return cmd
 }
 
 func autostartOn() bool {
@@ -28,13 +33,17 @@ func autostartOn() bool {
 }
 
 func setAutostart(on bool, pass string, port int) {
+	setAutostartNamed(on, pass, port, "")
+}
+
+func setAutostartNamed(on bool, pass string, port int, name string) {
 	k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.SET_VALUE)
 	if err != nil {
 		return
 	}
 	defer k.Close()
 	if on {
-		k.SetStringValue(runVal, autostartCmd(pass, port))
+		k.SetStringValue(runVal, autostartCmd(pass, port, name))
 	} else {
 		k.DeleteValue(runVal)
 	}

@@ -183,7 +183,7 @@ func runUI(notray bool, pass string, port int, ips HostIPs, reg *ClientRegistry)
 		ni.ContextMenu().Actions().Add(showAct)
 
 		autoAct := walk.NewAction()
-		autoAct.SetText("开机自启")
+		autoAct.SetText("登录时打开界面")
 		autoAct.SetChecked(autostartOn())
 		autoAct.Triggered().Attach(func() {
 			on := !autoAct.Checked()
