@@ -39,6 +39,7 @@ func (p *pipeInjector) emit(m In) {
 }
 
 func (p *pipeInjector) MoveRel(dx, dy int) { p.emit(In{T: "move", Dx: dx, Dy: dy}) }
+func (p *pipeInjector) MoveAbs(nx, ny int) { p.emit(In{T: "moveabs", X: nx, Y: ny}) }
 func (p *pipeInjector) Button(b string, down bool) {
 	d := down
 	p.emit(In{T: "button", B: b, Down: &d})

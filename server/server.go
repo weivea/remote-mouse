@@ -111,6 +111,9 @@ func (s *Server) handle(c net.Conn) {
 		switch m.T {
 		case "ping":
 			s.send(c, map[string]any{"t": "pong", "ts": m.Ts})
+		case "getscreen":
+			w, h := screenSize()
+			s.send(c, map[string]any{"t": "screen", "w": w, "h": h})
 		case "bye":
 			return
 		default:

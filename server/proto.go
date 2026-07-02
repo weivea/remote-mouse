@@ -13,6 +13,8 @@ type In struct {
 	Proof string `json:"proof,omitempty"`
 	Dx    int    `json:"dx,omitempty"`
 	Dy    int    `json:"dy,omitempty"`
+	X     int    `json:"x,omitempty"`
+	Y     int    `json:"y,omitempty"`
 	B     string `json:"b,omitempty"`
 	Down  *bool  `json:"down,omitempty"`
 	S     string `json:"s,omitempty"`

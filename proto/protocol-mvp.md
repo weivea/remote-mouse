@@ -29,12 +29,17 @@ iOS 客户端 ↔ Windows/macOS 服务端。范围：mDNS 发现 + 密码认证 
 | t | 字段 | 含义 |
 |------|------|------|
 | move | dx,dy (int) | 相对移动，像素 |
+| moveabs | x,y (int, 0..65535) | 绝对定位，归一化到主屏（0,0=左上，65535,65535=右下）。飞鼠绝对/校准模式用 |
 | button | b("left"/"right"/"middle"), down(bool) | 按下/抬起 |
 | click | b | 单击（按下+抬起，便捷） |
 | scroll | dx,dy (int) | 滚动 |
 | text | s (string) | 文本输入（含中文/emoji，unicode 注入）|
 | key | code(int),down(bool),mods(int) | 特殊键/快捷键/媒体键 |
+| getscreen | — | 查询主屏尺寸；S→C 回 screen {w,h} |
 | ping | ts(int ms) | 心跳；S→C 回 pong {ts} |
+
+- 服务端回执：`pong {t,ts}`、`screen {t,w,h(int 像素)}`（主屏；未知平台回 0）。
+- moveabs 归一化 0..65535 对齐 Windows SendInput 绝对坐标；服务端映射到主屏像素（mac CGDisplayBounds / win 主显示器）。客户端取 screen{w,h} 仅用于按纵横比校正校准范围。
 
 - mods 位掩码：ctrl=1 alt=2 shift=4 meta(win/cmd)=8。printable 走 text。
 - code：字母 A–Z=65–90、数字 0–9=48–57（配 mods 快捷键，如 Ctrl+C=67/1）；

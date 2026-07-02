@@ -1,17 +1,20 @@
 import SwiftUI
 
-// Air-mouse screen (Phase 1, relative mode): the cursor is driven by tilting the
-// phone (MotionController); this view only hosts the buttons. Layout per spec —
-// left click on the left, a scroll strip in the middle, right click on the
-// right, and a calibration switch in the bottom-left corner. The calibration
-// switch is a placeholder here; Phase 2 wires it to an absolute/calibrated mode.
+// Air-mouse screen: the cursor is driven by tilting the phone (MotionController);
+// this view hosts the buttons and the calibration flow. Layout per spec — left
+// click on the left, a scroll strip in the middle, right click on the right, and
+// a calibration switch in the bottom-left corner.
+//
+// Two modes (bottom-left switch):
+//  - OFF: relative mode (default) — tilt/turn nudges the cursor.
+//  - ON:  absolute/calibrated mode — after a short circle-wave calibration, the
+//         phone's pointing maps to a fixed screen position.
 //
 // Grip assumption: held in portrait, top edge pointed forward like a remote.
 struct AirMousePane: View {
     @EnvironmentObject var client: Client
     @StateObject private var motion = MotionController()
     @State private var calibrate = false
-    @State private var showCalibrateNote = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -24,9 +27,12 @@ struct AirMousePane: View {
 
             bottomBar
         }
+        .overlay { if motion.calibrating { calibrationOverlay } }
         .overlay { if !motion.available { unavailableOverlay } }
         .onAppear {
             motion.onMove = { dx, dy in client.move(dx, dy) }
+            motion.onMoveAbs = { nx, ny in client.moveAbs(nx, ny) }
+            client.requestScreen()
             motion.start()
         }
         .onDisappear { motion.stop() }
@@ -45,6 +51,8 @@ struct AirMousePane: View {
             onUp: { client.button(b, false); motion.setPaused(false) }
         )
     }
+
+    @State private var scrollLast: CGFloat = 0
 
     private var scrollStrip: some View {
         RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground))
@@ -65,8 +73,6 @@ struct AirMousePane: View {
                 .onEnded { _ in scrollLast = 0; motion.setPaused(false) })
     }
 
-    @State private var scrollLast: CGFloat = 0
-
     // MARK: bottom bar
 
     private var bottomBar: some View {
@@ -78,25 +84,53 @@ struct AirMousePane: View {
             .buttonStyle(.bordered)
             .onChange(of: calibrate) { _, on in
                 if on {
-                    // Phase 2: enter absolute/calibrated mode here.
-                    showCalibrateNote = true
-                    calibrate = false
+                    client.requestScreen() // refresh screen size for aspect
+                    motion.beginCalibration()
+                } else {
+                    motion.cancelCalibration()
+                    motion.setMode(.relative)
                 }
             }
 
             Spacer()
 
-            Label(motion.running ? "陀螺控制中 · 倾斜手机移动光标" : "陀螺未启用",
-                  systemImage: "gyroscope")
+            Label(statusText, systemImage: "gyroscope")
                 .font(.caption).foregroundStyle(.secondary)
                 .lineLimit(1).minimumScaleFactor(0.8)
         }
         .frame(height: 44)
-        .alert("绝对校准模式即将上线", isPresented: $showCalibrateNote) {
-            Button("好", role: .cancel) {}
-        } message: {
-            Text("当前为相对模式：倾斜/转动手机即可移动光标。指向式绝对校准将在下一步开放。")
+    }
+
+    private var statusText: String {
+        if !motion.running { return "陀螺未启用" }
+        return motion.mode == .absolute ? "绝对模式 · 指向移动光标" : "相对模式 · 倾斜移动光标"
+    }
+
+    // MARK: calibration overlay
+
+    private var calibrationOverlay: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "gyroscope").font(.system(size: 40))
+                .symbolEffect(.pulse)
+            Text("校准中").font(.title3.weight(.semibold))
+            Text("保持指向屏幕，手腕带动手机缓慢转一圈\n划出你舒适的移动范围，然后点「完成」")
+                .font(.footnote).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            HStack(spacing: 12) {
+                Button("取消") {
+                    motion.cancelCalibration()
+                    calibrate = false
+                }
+                .buttonStyle(.bordered)
+                Button("完成") {
+                    motion.finishCalibration(screenW: client.screenW, screenH: client.screenH)
+                }
+                .buttonStyle(.borderedProminent)
+            }
         }
+        .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.ultraThinMaterial)
     }
 
     private var unavailableOverlay: some View {

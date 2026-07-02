@@ -8,6 +8,9 @@ enum ClientState: Equatable {
 final class Client: ObservableObject {
     @Published var state: ClientState = .idle
     @Published var serverName: String = ""
+    // Primary-screen size reported by the server via getscreen; 0 until known.
+    @Published var screenW: Int = 0
+    @Published var screenH: Int = 0
 
     private var conn: NWConnection?
     private var password = ""
@@ -20,6 +23,13 @@ final class Client: ObservableObject {
     private var pendingMoveDY = 0
     private var moveFlushScheduled = false
     private let moveInterval: TimeInterval = 0.008
+
+    // Absolute position is latest-wins (not accumulated): only the newest target
+    // matters, so a burst of samples collapses to one packet per moveInterval.
+    private var pendingAbsX = 0
+    private var pendingAbsY = 0
+    private var absPending = false
+    private var absFlushScheduled = false
 
     // Plain TCP with Nagle disabled so each small input packet ships immediately.
     private static func makeParams() -> NWParameters {
@@ -57,6 +67,7 @@ final class Client: ObservableObject {
         q.async { [weak self] in
             guard let self else { return }
             self.flushMove()
+            self.flushAbs()
             self.writeLine(["t": "bye"])
             self.conn?.cancel()
             self.conn = nil
@@ -81,6 +92,27 @@ final class Client: ObservableObject {
     func click(_ b: String) { send(["t": "click", "b": b]) }
     func button(_ b: String, _ down: Bool) { send(["t": "button", "b": b, "down": down]) }
     func scroll(_ dx: Int, _ dy: Int) { send(["t": "scroll", "dx": dx, "dy": dy]) }
+
+    // Absolute pointer position, normalized 0..65535 over the primary screen.
+    // Coalesced latest-wins so high-rate motion output caps at one packet per
+    // moveInterval without lagging behind the true position.
+    func moveAbs(_ nx: Int, _ ny: Int) {
+        q.async { [weak self] in
+            guard let self else { return }
+            self.pendingAbsX = nx
+            self.pendingAbsY = ny
+            self.absPending = true
+            guard !self.absFlushScheduled else { return }
+            self.absFlushScheduled = true
+            self.q.asyncAfter(deadline: .now() + self.moveInterval) { [weak self] in
+                self?.flushAbs()
+            }
+        }
+    }
+
+    // Ask the server for its primary-screen size (reply handled as "screen").
+    func requestScreen() { send(["t": "getscreen"]) }
+
     func text(_ s: String) { send(["t": "text", "s": s]) }
     func key(_ code: Int, mods: Int = 0) {
         send(["t": "key", "code": code, "down": true, "mods": mods])
@@ -98,12 +130,21 @@ final class Client: ObservableObject {
         writeLine(["t": "move", "dx": dx, "dy": dy])
     }
 
+    // Flush the latest absolute position. Must run on `q`.
+    private func flushAbs() {
+        absFlushScheduled = false
+        guard absPending else { return }
+        absPending = false
+        writeLine(["t": "moveabs", "x": pendingAbsX, "y": pendingAbsY])
+    }
+
     // Serialize non-move sends on `q`, flushing pending motion first so a click
     // or scroll never overtakes the moves that came before it.
     private func send(_ obj: [String: Any]) {
         q.async { [weak self] in
             guard let self else { return }
             self.flushMove()
+            self.flushAbs()
             self.writeLine(obj)
         }
     }
@@ -143,6 +184,10 @@ final class Client: ObservableObject {
         case "auth_ok":
             DispatchQueue.main.async { self.serverName = m["server"] as? String ?? "" }
             set(.connected)
+        case "screen":
+            if let w = m["w"] as? Int, let h = m["h"] as? Int {
+                DispatchQueue.main.async { self.screenW = w; self.screenH = h }
+            }
         case "error":
             set(.failed(m["msg"] as? String ?? "error"))
         default: break

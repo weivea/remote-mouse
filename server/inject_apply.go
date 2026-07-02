@@ -10,6 +10,8 @@ func applyEvent(inj Injector, m In) {
 	switch m.T {
 	case "move":
 		inj.MoveRel(m.Dx, m.Dy)
+	case "moveabs":
+		inj.MoveAbs(m.X, m.Y)
 	case "button":
 		inj.Button(m.B, m.Down != nil && *m.Down)
 	case "click":

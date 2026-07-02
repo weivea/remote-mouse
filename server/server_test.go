@@ -60,6 +60,58 @@ func TestHandleRegistersAndDeregisters(t *testing.T) {
 	}
 }
 
+// TestHandleGetScreenReplies drives a handshake then a getscreen query and
+// asserts the server answers with a screen message carrying non-negative dims.
+func TestHandleGetScreenReplies(t *testing.T) {
+	s := &Server{password: "pw", name: "srv", inj: newInjector(), reg: NewClientRegistry()}
+
+	cli, srvConn := net.Pipe()
+	go s.handle(srvConn)
+	defer cli.Close()
+	cli.SetDeadline(time.Now().Add(3 * time.Second))
+
+	enc := json.NewEncoder(cli)
+	sc := bufio.NewScanner(cli)
+
+	if err := enc.Encode(map[string]any{"t": "hello", "name": "P"}); err != nil {
+		t.Fatal(err)
+	}
+	if !sc.Scan() {
+		t.Fatal("no challenge")
+	}
+	var ch struct {
+		Salt  string `json:"salt"`
+		Nonce string `json:"nonce"`
+	}
+	json.Unmarshal(sc.Bytes(), &ch)
+	salt, _ := base64.StdEncoding.DecodeString(ch.Salt)
+	nonce, _ := base64.StdEncoding.DecodeString(ch.Nonce)
+	if err := enc.Encode(map[string]any{"t": "auth", "proof": deriveProof("pw", salt, nonce)}); err != nil {
+		t.Fatal(err)
+	}
+	if !sc.Scan() { // auth_ok
+		t.Fatal("no auth_ok")
+	}
+
+	if err := enc.Encode(map[string]any{"t": "getscreen"}); err != nil {
+		t.Fatal(err)
+	}
+	if !sc.Scan() {
+		t.Fatal("no screen reply")
+	}
+	var reply struct {
+		T    string `json:"t"`
+		W, H int
+	}
+	json.Unmarshal(sc.Bytes(), &reply)
+	if reply.T != "screen" {
+		t.Fatalf("reply t = %q, want screen", reply.T)
+	}
+	if reply.W < 0 || reply.H < 0 {
+		t.Fatalf("screen dims = %dx%d, want non-negative", reply.W, reply.H)
+	}
+}
+
 func waitFor(cond func() bool) bool {
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {

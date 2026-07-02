@@ -17,6 +17,24 @@ static void moveRel(int dx, int dy) {
     CFRelease(m);
 }
 
+// moveAbs positions the pointer at a normalized 0..65535 coordinate mapped onto
+// the main display, for the air-mouse absolute mode.
+static void moveAbs(int nx, int ny) {
+    CGRect b = CGDisplayBounds(CGMainDisplayID());
+    double x = b.origin.x + (double)nx / 65535.0 * b.size.width;
+    double y = b.origin.y + (double)ny / 65535.0 * b.size.height;
+    CGPoint p = CGPointMake(x, y);
+    CGEventRef m = CGEventCreateMouseEvent(NULL, kCGEventMouseMoved, p, kCGMouseButtonLeft);
+    CGEventPost(kCGHIDEventTap, m);
+    CFRelease(m);
+}
+
+static void mainScreenSize(int* w, int* h) {
+    CGRect b = CGDisplayBounds(CGMainDisplayID());
+    *w = (int)b.size.width;
+    *h = (int)b.size.height;
+}
+
 static void button(int btn, int down) {
     CGEventRef e = CGEventCreate(NULL);
     CGPoint p = CGEventGetLocation(e);
@@ -64,6 +82,15 @@ type macInjector struct{}
 func newInjector() Injector { return &macInjector{} }
 
 func (m *macInjector) MoveRel(dx, dy int) { C.moveRel(C.int(dx), C.int(dy)) }
+
+func (m *macInjector) MoveAbs(nx, ny int) { C.moveAbs(C.int(nx), C.int(ny)) }
+
+// screenSize returns the main display size in pixels for the getscreen query.
+func screenSize() (int, int) {
+	var w, h C.int
+	C.mainScreenSize(&w, &h)
+	return int(w), int(h)
+}
 
 func (m *macInjector) Button(btn string, down bool) {
 	d := C.int(0)

@@ -13,6 +13,9 @@ type fakeInjector struct{ calls []string }
 func (f *fakeInjector) MoveRel(dx, dy int) {
 	f.calls = append(f.calls, fmt.Sprintf("move %d %d", dx, dy))
 }
+func (f *fakeInjector) MoveAbs(nx, ny int) {
+	f.calls = append(f.calls, fmt.Sprintf("moveabs %d %d", nx, ny))
+}
 func (f *fakeInjector) Button(b string, down bool) {
 	f.calls = append(f.calls, fmt.Sprintf("button %s %v", b, down))
 }
@@ -40,11 +43,12 @@ func TestApplyEventClickExpandsToTwoButtons(t *testing.T) {
 func TestApplyEventCoversAllPointerAndKeyTypes(t *testing.T) {
 	f := &fakeInjector{}
 	applyEvent(f, In{T: "move", Dx: 3, Dy: -4})
+	applyEvent(f, In{T: "moveabs", X: 100, Y: 200})
 	applyEvent(f, In{T: "button", B: "right", Down: bptr(true)})
 	applyEvent(f, In{T: "scroll", Dx: 0, Dy: 2})
 	applyEvent(f, In{T: "text", S: "hi"})
 	applyEvent(f, In{T: "key", Code: 65, Mods: 2, Down: bptr(false)})
-	want := []string{"move 3 -4", "button right true", "scroll 0 2", "text hi", "key 65 2 false"}
+	want := []string{"move 3 -4", "moveabs 100 200", "button right true", "scroll 0 2", "text hi", "key 65 2 false"}
 	if !reflect.DeepEqual(f.calls, want) {
 		t.Fatalf("calls = %v, want %v", f.calls, want)
 	}

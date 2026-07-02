@@ -186,6 +186,16 @@ func (w *winInjector) MoveRel(dx, dy int) {
 	}
 	sendMany([]input{w.absMove(dx, dy)})
 }
+
+// MoveAbs positions the pointer at a normalized 0..65535 coordinate over the
+// primary monitor (MOUSEEVENTF_ABSOLUTE without VIRTUALDESK), matching the
+// primary-screen size reported by screenSize(). Used by the air-mouse absolute
+// mode on the ordinary desktop.
+func (w *winInjector) MoveAbs(nx, ny int) {
+	x := clampI32(int32(nx), 0, 65535)
+	y := clampI32(int32(ny), 0, 65535)
+	sendMany([]input{mouse(mouseInput{dx: x, dy: y, flags: moveRelF | absoluteF})})
+}
 func (w *winInjector) Button(btn string, down bool) {
 	f := buttonFlag(btn, down)
 	if !w.absolute {
@@ -290,6 +300,20 @@ func virtualScreen() (x, y, w, h int32) {
 func sysMetric(i int) int32 {
 	r, _, _ := procGetSystemMetrics.Call(uintptr(i))
 	return int32(r)
+}
+
+// screenSize returns the primary monitor size in pixels for the getscreen
+// query. MoveAbs maps normalized coordinates over this same primary monitor.
+func screenSize() (int, int) {
+	w := sysMetric(smCXScreen)
+	h := sysMetric(smCYScreen)
+	if w <= 0 {
+		w = 1
+	}
+	if h <= 0 {
+		h = 1
+	}
+	return int(w), int(h)
 }
 
 func cursorPos() (x, y int32, ok bool) {
