@@ -14,7 +14,7 @@ struct RootView: View {
     @EnvironmentObject var client: Client
     var body: some View {
         if client.state == .connected {
-            TouchpadView()
+            ControlView()
         } else {
             DiscoveryView()
         }

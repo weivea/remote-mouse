@@ -1,74 +1,64 @@
 import SwiftUI
 
-struct TouchpadView: View {
+// Touchpad screen: drag to move / tap to click, a scroll strip, and click buttons.
+// Layout adapts to orientation — buttons sit below in portrait and flank the pad
+// in landscape (compact height) for two-thumb reach.
+struct TouchpadPane: View {
     @EnvironmentObject var client: Client
+    @Environment(\.verticalSizeClass) private var vSize
     @State private var last: CGSize = .zero
     @State private var scrollLast: CGFloat = 0
-    @State private var typed = ""
     private let sens: CGFloat = 1.6
 
+    private var landscape: Bool { vSize == .compact }
+
     var body: some View {
-        VStack(spacing: 10) {
-            HStack {
-                Text(client.serverName.isEmpty ? "已连接" : "已连接：\(client.serverName)")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                Spacer()
-                Button("断开") { client.disconnect() }.tint(.red)
-            }.padding(.horizontal)
-
-            HStack(spacing: 8) {
+        if landscape {
+            HStack(spacing: 10) {
+                clickButton("左键", left: true).frame(width: 92)
                 touchpad
-                scrollStrip.frame(width: 44)
+                scrollStrip.frame(width: 50)
+                clickButton("右键", left: false).frame(width: 92)
             }
-            HStack(spacing: 8) {
-                Button("左键") { client.click("left") }.buttonStyle(.borderedProminent)
-                Button("右键") { client.click("right") }.buttonStyle(.bordered)
-            }.frame(height: 56).padding(.horizontal)
-
-            TextField("输入文本回车发送", text: $typed)
-                .textFieldStyle(.roundedBorder).padding(.horizontal)
-                .onSubmit { if !typed.isEmpty { client.text(typed); typed = "" } }
-            keyBar
-            Spacer(minLength: 0)
+        } else {
+            VStack(spacing: 12) {
+                HStack(spacing: 10) {
+                    touchpad
+                    scrollStrip.frame(width: 50)
+                }
+                HStack(spacing: 10) {
+                    clickButton("左键", left: true)
+                    clickButton("右键", left: false)
+                }
+                .frame(height: 64)
+            }
         }
-        .padding(.vertical)
     }
 
-    private var keyBar: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                key("delete.left", K.back)
-                key("arrow.up", K.up)
-                key("arrow.turn.down.left", K.enter)
-                key("escape", K.esc)
-            }
-            HStack(spacing: 6) {
-                key("arrow.left", K.left)
-                key("arrow.down", K.down)
-                key("arrow.right", K.right)
-            }
-            HStack(spacing: 6) {
-                Button("复制") { client.key(67, mods: K.ctrl) }
-                Button("粘贴") { client.key(86, mods: K.ctrl) }
-                Button("全选") { client.key(65, mods: K.ctrl) }
-            }.buttonStyle(.bordered).font(.footnote)
-            HStack(spacing: 6) {
-                key("speaker.minus", K.volDown)
-                key("playpause", K.playPause)
-                key("speaker.plus", K.volUp)
-            }
-        }.padding(.horizontal)
+    @ViewBuilder private func clickButton(_ title: String, left: Bool) -> some View {
+        if left {
+            Button { client.click("left") } label: { buttonLabel(title) }
+                .buttonStyle(.borderedProminent)
+        } else {
+            Button { client.click("right") } label: { buttonLabel(title) }
+                .buttonStyle(.bordered)
+        }
     }
 
-    private func key(_ icon: String, _ code: Int) -> some View {
-        Button { client.key(code) } label: {
-            Image(systemName: icon).frame(maxWidth: .infinity).frame(height: 36)
-        }.buttonStyle(.bordered)
+    private func buttonLabel(_ title: String) -> some View {
+        Text(title).font(.headline)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var touchpad: some View {
         RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground))
-            .overlay(Text("触控板").foregroundStyle(.secondary))
+            .overlay(
+                VStack(spacing: 6) {
+                    Image(systemName: "hand.point.up.left").font(.title2)
+                    Text("拖动移动光标 · 轻点左键").font(.footnote)
+                }.foregroundStyle(.secondary)
+            )
+            .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { v in
                     let dx = (v.translation.width - last.width) * sens
@@ -82,8 +72,15 @@ struct TouchpadView: View {
     }
 
     private var scrollStrip: some View {
-        RoundedRectangle(cornerRadius: 16).fill(Color(.tertiarySystemBackground))
-            .overlay(Image(systemName: "arrow.up.arrow.down").foregroundStyle(.secondary))
+        RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground))
+            .overlay(
+                VStack(spacing: 6) {
+                    Image(systemName: "chevron.up")
+                    Image(systemName: "arrow.up.arrow.down")
+                    Image(systemName: "chevron.down")
+                }.font(.footnote).foregroundStyle(.secondary)
+            )
+            .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { v in
                     let dy = v.translation.height - scrollLast

@@ -21,6 +21,9 @@ xcodebuild -project RemoteMouse.xcodeproj -scheme RemoteMouse \
 - `Models/Discovery.swift`  NWBrowser 浏览 `_remotemouse._tcp`
 - `Models/Client.swift`  NWConnection、握手认证、发送事件
 - `Views/DiscoveryView.swift`  发现列表 + 密码 + 手动 IP
-- `Views/TouchpadView.swift`  触控板、左右键、滚动、文本
+- `Views/ControlView.swift`  连接后容器：顶部悬浮按钮切换触控板 / 文本 / 全键盘，含断开；支持横竖屏
+- `Views/TouchpadView.swift`  触控板界面：移动/轻点 + 滚动条 + 左右键
+- `Views/TextInputView.swift`  文本界面：多行输入并发送到电脑
+- `Views/KeyboardView.swift`  全键盘界面：常用键 / 编辑(复制粘贴) / 方向键 / 媒体键
 
 > 真机/同 WiFi 测试连接电脑端 `server`。模拟器可用「手动连接 127.0.0.1:27500」。
