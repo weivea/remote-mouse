@@ -1,5 +1,7 @@
 # rmserver 控制面板 Implementation Plan
 
+> **Status: ✅ 完成（2026-07-02）** — Task 1–12 已实现并提交；Task 13 自动化验证 `go vet` / `go build` / `go test ./...` 全通过（`-race` 因本机无 CGO/gcc 未跑），端到端手工冒烟已人工验证通过。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 把 `rmserver.exe` 的主窗口升级为完整控制面板：安装/卸载/启停服务、设服务启动类型、实时显示服务与连接状态、可编辑并热应用端口/密码/设备名，并让服务模式下也能看到在线设备。
