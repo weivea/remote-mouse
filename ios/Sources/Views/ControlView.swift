@@ -2,12 +2,13 @@ import SwiftUI
 
 // The three post-connection screens, switched from the floating top bar.
 enum ControlTab: CaseIterable, Identifiable {
-    case touchpad, text, keyboard
+    case touchpad, airmouse, text, keyboard
     var id: Self { self }
 
     var title: String {
         switch self {
         case .touchpad: return "触控板"
+        case .airmouse: return "飞鼠"
         case .text: return "文本"
         case .keyboard: return "键盘"
         }
@@ -16,6 +17,7 @@ enum ControlTab: CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .touchpad: return "rectangle.and.hand.point.up.left.fill"
+        case .airmouse: return "gyroscope"
         case .text: return "text.cursor"
         case .keyboard: return "keyboard"
         }
@@ -47,6 +49,7 @@ struct ControlView: View {
     @ViewBuilder private var pane: some View {
         switch tab {
         case .touchpad: TouchpadPane()
+        case .airmouse: AirMousePane()
         case .text: TextInputPane()
         case .keyboard: KeyboardPane()
         }
